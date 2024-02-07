@@ -1,5 +1,0 @@
-#!/bin/bash
-structure=$1
-category=$(cat dir.cla.scope.2.08-stable.tsv | grep $structure | awk '{print $4}' | awk '!seen[$0]++')
-homologs=$(cat dir.cla.scope.2.08-stable.tsv | grep $category | awk '{print $2}' | awk '!seen[$0]++')
-echo $homologs > homologs/$structure.txt

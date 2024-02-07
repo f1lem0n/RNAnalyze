@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# This script allows for multiple structure alignment
+# of homologs acquired by running get_homologs
+#
+# !!! Adding USalign location to $PATH is required !!!
+
+if [ -z $1 ]; then
+	printf "\nUsage:\n\t./align <PDB_ID>\n"
+	exit 1
+fi
+
+USalign -dir $1/str/ $1/list.txt -suffix .pdb -mm 4 > $1/alignment

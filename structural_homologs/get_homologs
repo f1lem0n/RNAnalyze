@@ -13,7 +13,7 @@ homologs=$(cat dir.cla.scope.2.08-stable.tsv | grep $category | awk '{print $2}'
 mkdir data/$1/seq -p
 mkdir data/$1/str -p
 for e in $homologs; do
-	echo $e >> ../data/$1/list.txt
-	wget https://www.rcsb.org/fasta/entry/$e -O ../data/$1/seq/$e.fasta
-	wget https://files.rcsb.org/download/$e.pdb -O ../data/$1/str/$e.pdb
+	echo $e >> data/$1/list.txt
+	wget https://www.rcsb.org/fasta/entry/$e -O data/$1/seq/$e.fasta
+	wget https://files.rcsb.org/download/$e.pdb -O data/$1/str/$e.pdb
 done

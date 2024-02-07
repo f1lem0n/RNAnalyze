@@ -10,4 +10,5 @@ if [ -z $1 ]; then
 	exit 1
 fi
 
-USalign -dir data/$1/str/ data/$1/list.txt -suffix .pdb -mm 4 > data/$1/alignment
+USalign -dir ../data/$1/str/ ../data/$1/list.txt -suffix .pdb -mm 4 -o ../data/$1/superposed > ../data/$1/alignment
+

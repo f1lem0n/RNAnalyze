@@ -3,13 +3,8 @@
 # This script allows for getting all the sequence homologs
 # automatically for a given PDB ID with BLASTp
 
-if [ -z $1 ]; then
-    printf "\nUsage:\n\t./get_homologs <PDB_ID>\n"
-    exit 1
-fi
-
 mkdir data/$1/sequences -p
 wget https://www.rcsb.org/fasta/entry/$1 -O data/$1/sequences/$1.fasta
-printf "\nRunning BLASTp...\n"
+printf "Running BLASTp...\n"
 blastp -query data/$1/sequences/$1.fasta -db nr -out data/$1/sequences/blast_results.txt \
-       -remote -outfmt 6 -max_target_seqs 100 -evalue 0.0001 \
+       -remote -outfmt 6 -max_target_seqs 100 -evalue 0.0001

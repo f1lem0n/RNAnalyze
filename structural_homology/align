@@ -5,11 +5,6 @@
 #
 # !!! Adding USalign location to $PATH is required !!!
 
-if [ -z $1 ]; then
-	printf "\nUsage:\n\t./align <PDB_ID>\n"
-	exit 1
-fi
-
 mkdir data/$1/alignment -p
 USalign -dir data/$1/structures/ data/$1/list.txt -suffix .pdb -mm 4 \
 		-o data/$1/alignment/sup > data/$1/alignment/alignment.log

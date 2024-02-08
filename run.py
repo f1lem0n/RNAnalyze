@@ -40,20 +40,21 @@ def move_zip_output():
         shell=True,
         check=True,
     )
-    # run(
-    #     "mv sequence_homology/data/* output/sequence_homology/.",
-    #     shell=True,
-    #     check=True,
-    # )
+    run(
+        "mv sequence_homology/data/* output/sequence_homology/.",
+        shell=True,
+        check=True,
+    )
     with ZipFile("output.zip", "w") as zipf:
         for file in get_all_file_paths("output"):
             zipf.write(file)
 
 
 def main():
+    run("echo $PATH", shell=True, check=True)
     pdb_id = input("Enter PDB ID: ").lower()
     run_structural_homology_analysis(pdb_id)
-    # run_sequence_homology_analysis(pdb_id)
+    run_sequence_homology_analysis(pdb_id)
     move_zip_output()
 
 

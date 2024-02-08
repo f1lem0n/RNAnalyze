@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # This script allows for multiple structure alignment
 # of homologs acquired by running get_homologs

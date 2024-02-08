@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # This script allows for getting all the structural
 # homologs for a given PDB ID based on SCOPe

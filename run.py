@@ -7,6 +7,11 @@ def run_structural_homology_analysis(pdb_id):
     run(f"./structural_homology/align {pdb_id}", shell=True, check=True)
 
 
+def run_sequence_homology_analysis(pdb_id):
+    run(f"./sequence_homology/get_homologs {pdb_id}", shell=True, check=True)
+    # run(f"./sequence_homology/align {pdb_id}", shell=True, check=True)
+
+
 def main():
     pdb_id = argv[1]
 

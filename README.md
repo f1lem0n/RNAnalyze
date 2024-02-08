@@ -4,7 +4,7 @@
 
 ## Procedura
 1. Translacja mRNA na sekwencję aminokwasową, identyfikacja białka, wybór odpowiadającej struktury z [RCSB PDB](https://www.rcsb.org/).
-2. Wyszukiwanie homologów (sekwencyjnych lub strukturalnych) lub wspólnych motywów strukturalnych ([SCOPe](https://scop.berkeley.edu/)).
+2. Wyszukiwanie homologów sekwencyjnych ([BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi)) lub strukturalnych ([SCOPe](https://scop.berkeley.edu/)).
 3. MSA dla homologów: dopasowanie sekwencji ([clustalw](https://www.genome.jp/tools-bin/clustalw))
    lub struktur ([USalign](https://zhanggroup.org/US-align/)).
 4. Konwersja MSA na dopasowanie nukleotydowe.

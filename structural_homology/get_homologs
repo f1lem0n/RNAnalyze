@@ -10,10 +10,10 @@ fi
 
 category=$(cat dir.cla.scope.2.08-stable.tsv | grep $1 | awk '{print $4}' | awk '!seen[$0]++')
 homologs=$(cat dir.cla.scope.2.08-stable.tsv | grep $category | awk '{print $2}' | awk '!seen[$0]++')
-mkdir data/$1/seq -p
-mkdir data/$1/str -p
+mkdir data/$1/sequences -p
+mkdir data/$1/structures -p
 for e in $homologs; do
 	echo $e >> data/$1/list.txt
-	wget https://www.rcsb.org/fasta/entry/$e -O data/$1/seq/$e.fasta
-	wget https://files.rcsb.org/download/$e.pdb -O data/$1/str/$e.pdb
+	wget https://www.rcsb.org/fasta/entry/$e -O data/$1/sequences/$e.fasta
+	wget https://files.rcsb.org/download/$e.pdb -O data/$1/structures/$e.pdb
 done

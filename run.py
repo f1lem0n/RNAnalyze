@@ -14,6 +14,8 @@ def run_sequence_homology_analysis(pdb_id):
 
 def main():
     pdb_id = argv[1]
+    run_structural_homology_analysis(pdb_id)
+    run_sequence_homology_analysis(pdb_id)
 
 
 if __name__ == "__main__":

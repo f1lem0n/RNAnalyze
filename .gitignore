@@ -1,3 +1,6 @@
-data/
-output/
+.snakemake/
+.parallel/
+results/
+swissprot/
+refseq_rna/
 *.zip

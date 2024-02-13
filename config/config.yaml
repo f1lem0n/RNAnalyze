@@ -1,0 +1,9 @@
+snakefile: workflow/Snakefile
+cores: 4
+rerun-incomplete: True
+use-singularity: True
+latency-wait: 60
+show-failed-logs: True
+keep-going: True
+printshellcmds: True
+restart-times: 3

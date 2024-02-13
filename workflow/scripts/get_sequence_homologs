@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# This script allows for getting all the sequence homologs
+# automatically for a given PDB ID with BLASTp
+
+mkdir data/$1/sequences -p
+wget https://www.rcsb.org/fasta/entry/$1 -O data/$1/sequences/$1.fasta
+
+printf "Running BLASTp...\n"
+blastp -query data/$1/sequences/$1.fasta -out data/$1/blastp_results.txt \
+       -remote -outfmt 6 -max_target_seqs 100 -evalue 0.0001 -db swissprot
+printf "Done.\n"
+
+printf "Running tBLASTn...\n"
+awk '{print $2}' data/$1/blastp_results.txt > data/$1/homologs.txt
+tblastn -query data/$1/homologs.txt -out data/$1/tblastn_results.txt \
+        -remote -outfmt 6 -max_target_seqs 100 -evalue 0.0001 -db refseq_select
+printf "Done.\n"

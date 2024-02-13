@@ -1,0 +1,74 @@
+from pathlib import Path
+
+
+configfile: "config/config.yaml"
+
+
+# Determine the PDB IDs to process
+with open("resources/list.txt") as f:
+    PDB_IDs = f.read().lower().splitlines()
+
+print(f"PDB IDs: {PDB_IDs}")
+
+
+rule all:
+    input:
+        expand("results/{pdb_id}/structural_homology", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/sequence_homology", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/sequence_homology/blastp_results.txt", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/sequence_homology/tblastn_results.txt", pdb_id=PDB_IDs),
+
+
+rule get_structural_homologs:
+    input:
+        "resources/dir.cla.scope.2.08-stable.tsv",
+    output:
+        dir=directory("results/{pdb_id}/structural_homology/"),
+        main_seq="results/{pdb_id}/structural_homology/sequences/{pdb_id}.fasta",
+        homologs="results/{pdb_id}/structural_homology/homologs.txt",
+    shell:
+        """
+        category=$(cat {input} | grep {wildcards.pdb_id} | awk '{{print $4}}' | awk '!seen[$0]++')
+        homologs=$(cat {input} | grep $category | awk '{{print $2}}' | awk '!seen[$0]++')
+
+        mkdir -p {output.dir}/sequences
+        mkdir -p {output.dir}/structures
+
+        for e in $homologs; do
+            echo $e >> {output.dir}/homologs.txt
+            wget https://www.rcsb.org/fasta/entry/$e -q -O {output.dir}/sequences/$e.fasta
+            wget https://files.rcsb.org/download/$e.pdb -q -O {output.dir}/structures/$e.pdb
+        done
+        """
+
+
+rule get_sequence_homologs:
+    input:
+        rules.get_structural_homologs.output.main_seq,
+    output:
+        "results/{pdb_id}/sequence_homology/tblastn_results.txt",
+        "results/{pdb_id}/sequence_homology/blastp_results.txt",
+        homologs="results/{pdb_id}/sequence_homology/homologs.txt",
+        dir=directory("results/{pdb_id}/sequence_homology/"),
+    singularity:
+        "docker://ncbi/blast"
+    shell:
+        """
+        BLASTDB=$(pwd)/database/swissprot:$(pwd)/database/refseq_rna:$BLASTDB
+
+        blastp -query {input} -out {output.dir}/blastp_results.txt \
+            -outfmt 6 -max_target_seqs 100 -evalue 0.0001 -num_threads 12 -db swissprot
+
+        awk '{{print $2}}' {output.dir}/blastp_results.txt > {output.dir}/homologs.txt
+
+        mkdir -p {output.dir}/sequences
+        cp {input} {output.dir}/sequences/.
+
+        tblastn -query {output.dir}/homologs.txt -out {output.dir}/tblastn_results.txt \
+            -outfmt 6 -max_target_seqs 100 -evalue 10e-20 -num_threads 12 -db refseq_rna
+        """
+
+
+rule align_structural_homologs:
+    input:
+        rules.get_structural_homologs.output.dir + "/sequences/{pdb_id}.fasta",

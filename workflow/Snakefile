@@ -13,47 +13,57 @@ print(f"PDB IDs: {PDB_IDs}")
 
 rule all:
     input:
-        expand("results/{pdb_id}/structural_homology", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/sequence_homology", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/sequence_homology/blastp_results.txt", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/sequence_homology/tblastn_results.txt", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/structural_homologs.txt", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/protein_sequences/combined.fasta", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/protein_sequences/done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/protein_structures/done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/tblastn_results.txt", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/structural_alignment/alignment.log", pdb_id=PDB_IDs),
 
 
-rule get_structural_homologs:
+rule find_structural_homologs_SCOPe:
     input:
         "resources/dir.cla.scope.2.08-stable.tsv",
     output:
-        dir=directory("results/{pdb_id}/structural_homology/"),
-        main_seq="results/{pdb_id}/structural_homology/sequences/{pdb_id}.fasta",
-        homologs="results/{pdb_id}/structural_homology/homologs.txt",
+        "results/{pdb_id}/structural_homologs.txt",
     shell:
         """
         category=$(cat {input} | grep {wildcards.pdb_id} \
             | awk '{{print $4}}' | awk '!seen[$0]++')
         homologs=$(cat {input} | grep $category \
             | awk '{{print $2}}' | awk '!seen[$0]++')
-
-        mkdir -p {output.dir}/sequences
-        mkdir -p {output.dir}/structures
-
-        for e in $homologs; do
-            echo $e >> {output.dir}/homologs.txt
-            wget https://www.rcsb.org/fasta/entry/$e -q \
-            -O {output.dir}/sequences/$e.fasta
-            wget https://files.rcsb.org/download/$e.pdb -q \
-            -O {output.dir}/structures/$e.pdb
-        done
+        echo $homologs | awk '{{gsub(" ", "\\n")}} 1' > {output}
         """
 
 
-rule get_sequence_homologs:
+rule get_protein_sequences_and_structures:
     input:
-        rules.get_structural_homologs.output.main_seq,
+        rules.find_structural_homologs_SCOPe.output,
     output:
-        "results/{pdb_id}/sequence_homology/tblastn_results.txt",
-        "results/{pdb_id}/sequence_homology/blastp_results.txt",
-        homologs="results/{pdb_id}/sequence_homology/homologs.txt",
-        dir=directory("results/{pdb_id}/sequence_homology/"),
+        "results/{pdb_id}/protein_sequences/done",
+        "results/{pdb_id}/protein_structures/done",
+        sequences=directory("results/{pdb_id}/protein_sequences"),
+        structures=directory("results/{pdb_id}/protein_structures"),
+        combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
+    shell:
+        """
+        for e in $(cat {input}); do
+            wget https://www.rcsb.org/fasta/entry/$e -q \
+            -O {output.sequences}/$e.fasta
+            wget https://files.rcsb.org/download/$e.pdb -q \
+            -O {output.structures}/$e.pdb
+        done
+        cat {output.sequences}/*.fasta > {output.combined_sequences}
+        touch {output.sequences}/done
+        touch {output.structures}/done
+        """
+
+
+rule tblastn_protein_sequences:
+    input:
+        rules.get_protein_sequences_and_structures.output.combined_sequences,
+    output:
+        "results/{pdb_id}/tblastn_results.txt",
     singularity:
         "docker://ncbi/blast"
     threads: config["blast"]["threads"]
@@ -61,25 +71,39 @@ rule get_sequence_homologs:
         evalue=config["blast"]["e_value"],
     shell:
         """
-        BLASTDB=$(pwd)/database/swissprot:$(pwd)/database/refseq_rna:$BLASTDB
+        BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
 
-        blastp -query {input} -out {output.dir}/blastp_results.txt \
-            -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
-            -num_threads {threads} -db swissprot
-
-        awk '{{print $2}}' {output.dir}/blastp_results.txt \
-            > {output.dir}/homologs.txt
-
-        mkdir -p {output.dir}/sequences
-        cp {input} {output.dir}/sequences/.
-
-        tblastn -query {output.dir}/homologs.txt \
-            -out {output.dir}/tblastn_results.txt \
+        tblastn -query {input} -out {output} \
             -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
             -num_threads {threads} -db refseq_rna
         """
 
 
-rule align_structural_homologs:
+rule align_protein_structures:
     input:
-        rules.get_structural_homologs.output.dir + "/sequences/{pdb_id}.fasta",
+        homologs=rules.find_structural_homologs_SCOPe.output,
+        dir=rules.get_protein_sequences_and_structures.output.structures,
+    output:
+        "results/{pdb_id}/structural_alignment/alignment.log",
+        "results/{pdb_id}/structural_alignment/done",
+        dir=directory("results/{pdb_id}/structural_alignment/"),
+    singularity:
+        "docker://f1lem0n/usalign:latest"
+    params:
+        split=config["usalign"]["split"],
+        full=config["usalign"]["full"],
+    shell:
+        """
+        # Run USalign
+        USalign -dir {input.dir}/structures {input.homologs} \
+            -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
+            -split {params.split} > {output.dir}/alignment.log
+
+        # Remove non-ATOM lines from superposed PDB files
+        for s in $(find {output.dir} -name "sup*.pdb"); do
+            awk '{{if($1=="ATOM") print $0}}' $s > $s.atoms
+            rm $s
+            mv $s.atoms $s
+        done
+        touch {output.dir}/done
+        """

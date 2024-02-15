@@ -1,4 +1,7 @@
 blast:
-  e_value: 1e-20
+  e_value: 1e-100
   threads: 12
   outfmt: 6
+usalign:
+  split: 0
+  full: T # T or F

@@ -15,8 +15,8 @@ rule all:
     input:
         expand("results/{pdb_id}/structural_homologs.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/protein_sequences/combined.fasta", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/protein_sequences/done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/protein_structures/done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/protein_sequences/.done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/protein_structures/.done", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/tblastn_results.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/structural_alignment/alignment.log", pdb_id=PDB_IDs),
 
@@ -30,9 +30,14 @@ rule find_structural_homologs_SCOPe:
         """
         category=$(cat {input} | grep {wildcards.pdb_id} \
             | awk '{{print $4}}' | awk '!seen[$0]++')
-        homologs=$(cat {input} | grep $category \
-            | awk '{{print $2}}' | awk '!seen[$0]++')
-        echo $homologs | awk '{{gsub(" ", "\\n")}} 1' > {output}
+        rm -f {output}.temp
+        for c in $category; do
+            homologs=$(cat {input} | grep $c \
+                | awk '{{print $2}}' | awk '!seen[$0]++')
+            echo $homologs | awk '{{gsub(" ", "\\n")}} 1' >> {output}.temp
+        done
+        awk '!seen[$0]++' {output}.temp > {output}
+        rm {output}.temp
         """
 
 
@@ -40,8 +45,8 @@ rule get_protein_sequences_and_structures:
     input:
         rules.find_structural_homologs_SCOPe.output,
     output:
-        "results/{pdb_id}/protein_sequences/done",
-        "results/{pdb_id}/protein_structures/done",
+        "results/{pdb_id}/protein_sequences/.done",
+        "results/{pdb_id}/protein_structures/.done",
         sequences=directory("results/{pdb_id}/protein_sequences"),
         structures=directory("results/{pdb_id}/protein_structures"),
         combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
@@ -54,8 +59,8 @@ rule get_protein_sequences_and_structures:
             -O {output.structures}/$e.pdb
         done
         cat {output.sequences}/*.fasta > {output.combined_sequences}
-        touch {output.sequences}/done
-        touch {output.structures}/done
+        touch {output.sequences}/.done
+        touch {output.structures}/.done
         """
 
 
@@ -85,7 +90,7 @@ rule align_protein_structures:
         dir=rules.get_protein_sequences_and_structures.output.structures,
     output:
         "results/{pdb_id}/structural_alignment/alignment.log",
-        "results/{pdb_id}/structural_alignment/done",
+        "results/{pdb_id}/structural_alignment/.done",
         dir=directory("results/{pdb_id}/structural_alignment/"),
     singularity:
         "docker://f1lem0n/usalign:latest"
@@ -95,7 +100,7 @@ rule align_protein_structures:
     shell:
         """
         # Run USalign
-        USalign -dir {input.dir}/structures {input.homologs} \
+        USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
             -split {params.split} > {output.dir}/alignment.log
 
@@ -105,5 +110,9 @@ rule align_protein_structures:
             rm $s
             mv $s.atoms $s
         done
-        touch {output.dir}/done
+
+        # Clean up and create .done file
+        rm *.pml
+        rm .pdb
+        touch {output.dir}/.done
         """

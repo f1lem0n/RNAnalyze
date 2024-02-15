@@ -2,6 +2,6 @@ blast:
   e_value: 1e-100
   threads: 12
   outfmt: 6
-usalign:
+usalign: # see USalign -h
   split: 0
-  full: T # T or F
+  full: T

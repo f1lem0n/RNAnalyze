@@ -2,7 +2,8 @@
 
 - [x] contenerize USalign
 - [x] add automatic nucleotide sequence downloader for structural homologs
-- [ ] add alignment rules to workflow (using `USalign` for structures and `clustalw` for sequences)
+- [x] add alignment rules to workflow (using `USalign` for structures and `clustalw` for sequences)
 - [ ] find out how to convert MSA to nucleotide alignment
-- [ ] find out if it is possible to automate RNAalifold and RNAfold
+- [x] find out if it is possible to automate RNAalifold and RNAfold
+- [ ] fill downstream analysis script
 - [ ] update README.md

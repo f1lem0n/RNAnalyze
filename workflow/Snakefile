@@ -19,7 +19,9 @@ rule all:
         expand("results/{pdb_id}/protein_structures/.done", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/tblastn_results.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/structural_alignment/alignment.log", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/nucleotide_sequences/.done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/nucleotide_alignment/alignment.log", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/nucleotide_alignment/alignment.txt", pdb_id=PDB_IDs),
 
 
 rule find_structural_homologs_SCOPe:
@@ -89,16 +91,12 @@ rule download_nucleotide_sequences:
     input:
         "results/{pdb_id}/tblastn_results.txt",
     output:
-        "results/{pdb_id}/nucleotide_sequences/.done",
         dir=directory("results/{pdb_id}/nucleotide_sequences/"),
+        combined_sequences="results/{pdb_id}/nucleotide_sequences/combined.fasta",
     conda:
         "envs/biopython.yaml"
-    shell:
-        """
-        python3 workflow/scripts/download_nucleotide_sequences.py \
-            {output.dir} $(awk '{{print $2}}' results/5x4r/tblastn_results.txt)
-        touch {output.dir}/.done
-        """
+    script:
+        "scripts/download_nucleotide_sequences.py"
 
 
 rule align_protein_structures:
@@ -133,3 +131,33 @@ rule align_protein_structures:
         rm .pdb
         touch {output.dir}/.done
         """
+
+
+rule align_nucleotide_sequences:
+    input:
+        rules.download_nucleotide_sequences.output.combined_sequences,
+    output:
+        "results/{pdb_id}/nucleotide_alignment/alignment.log",
+        "results/{pdb_id}/nucleotide_alignment/alignment.txt",
+        dir=directory("results/{pdb_id}/nucleotide_alignment/"),
+    singularity:
+        "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
+    shell:
+        """
+        clustalw -INFILE={input} -OUTFILE={output.dir}/alignment.txt \
+            > {output.dir}/alignment.log
+        """
+
+
+rule downstream_analysis:
+    input:
+        "results/{pdb_id}/structural_homologs.txt",
+        "results/{pdb_id}/protein_sequences/combined.fasta",
+        "results/{pdb_id}/tblastn_results.txt",
+        "results/{pdb_id}/structural_alignment/alignment.log",
+    output:
+        "results/{pdb_id}/downstream_analysis/.done",
+    conda:
+        "envs/dplyr.yaml"
+    script:
+        "scripts/downstream_analysis.R"

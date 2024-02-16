@@ -1,3 +1,4 @@
+email: your@email.com
 blast:
   e_value: 1e-100
   threads: 12

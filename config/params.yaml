@@ -3,6 +3,10 @@ blast:
   e_value: 1e-100
   threads: 12
   outfmt: 6
-usalign: # see USalign -h
+USalign: # see USalign -h
   split: 0
   full: T
+plots:
+  dpi: 300
+RNAalifold:
+  args_string: -p -r -d2 --noLP --color --aln

@@ -22,6 +22,8 @@ rule all:
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/nucleotide_alignment/alignment.log", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/nucleotide_alignment/alignment.txt", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/consensus_RNA_structure/MFE", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/consensus_RNA_structure/.done", pdb_id=PDB_IDs),
 
 
 rule find_structural_homologs_SCOPe:
@@ -110,8 +112,8 @@ rule align_protein_structures:
     singularity:
         "docker://f1lem0n/usalign:latest"
     params:
-        split=config["usalign"]["split"],
-        full=config["usalign"]["full"],
+        split=config["USalign"]["split"],
+        full=config["USalign"]["full"],
     shell:
         """
         # Run USalign
@@ -138,7 +140,7 @@ rule align_nucleotide_sequences:
         rules.download_nucleotide_sequences.output.combined_sequences,
     output:
         "results/{pdb_id}/nucleotide_alignment/alignment.log",
-        "results/{pdb_id}/nucleotide_alignment/alignment.txt",
+        alignment="results/{pdb_id}/nucleotide_alignment/alignment.txt",
         dir=directory("results/{pdb_id}/nucleotide_alignment/"),
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
@@ -146,6 +148,35 @@ rule align_nucleotide_sequences:
         """
         clustalw -INFILE={input} -OUTFILE={output.dir}/alignment.txt \
             > {output.dir}/alignment.log
+        """
+
+
+rule predict_consensus_RNA_structure:
+    input:
+        Path(rules.align_nucleotide_sequences.output.alignment).absolute(),
+    output:
+        "results/{pdb_id}/consensus_RNA_structure/MFE",
+        "results/{pdb_id}/consensus_RNA_structure/.done",
+        dir=directory("results/{pdb_id}/consensus_RNA_structure/"),
+    conda:
+        "envs/viennaRNA.yaml"
+    params:
+        args_string=config["RNAalifold"]["args_string"],
+        dpi=config["plots"]["dpi"],
+        mountain_script=Path("workflow/scripts/cmount.pl").absolute(),
+    shell:
+        """
+        cd {output.dir} && RNAalifold {params.args_string} \
+            < {input} > MFE \
+        && perl {params.mountain_script} alidot.ps > mountain.ps \
+        && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+            -sOutputFile=alidot.png alidot.ps \
+        && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+            -sOutputFile=alirna.png alirna.ps \
+        && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+            -sOutputFile=mountain.png mountain.ps \
+        || echo "ERROR: RNAalifold limits exceeded" > MFE
+        touch .done
         """
 
 

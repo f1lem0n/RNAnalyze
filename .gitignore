@@ -1,5 +1,6 @@
 .snakemake/
 .parallel/
+WIP/
 results/
 swissprot/
 refseq_rna/

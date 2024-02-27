@@ -188,6 +188,9 @@ rule predict_separate_RNA_structures:
         done
         touch .done
         """
+        # TODO
+        # this should colour the plot according to the consensus structure
+        # but does not work correctly yet
         # && perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
         #     > $sample"_ss".ps \
 

@@ -24,6 +24,7 @@ rule all:
         expand("results/{pdb_id}/nucleotide_alignment/alignment.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/consensus_RNA_structure/MFE", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/consensus_RNA_structure/.done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/separate_RNA_structures/.done", pdb_id=PDB_IDs),
 
 
 rule find_structural_homologs_SCOPe:
@@ -31,6 +32,7 @@ rule find_structural_homologs_SCOPe:
         "resources/dir.cla.scope.2.08-stable.tsv",
     output:
         "results/{pdb_id}/structural_homologs.txt",
+    threads: config["threads"]
     shell:
         """
         category=$(cat {input} | grep {wildcards.pdb_id} \
@@ -55,6 +57,7 @@ rule get_protein_sequences_and_structures:
         sequences=directory("results/{pdb_id}/protein_sequences"),
         structures=directory("results/{pdb_id}/protein_structures"),
         combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
+    threads: config["threads"]
     shell:
         """
         for e in $(cat {input}); do
@@ -76,7 +79,7 @@ rule tblastn_protein_sequences:
         "results/{pdb_id}/tblastn_results.txt",
     singularity:
         "docker://ncbi/blast"
-    threads: config["blast"]["threads"]
+    threads: config["threads"]
     params:
         evalue=config["blast"]["e_value"],
     shell:
@@ -95,6 +98,7 @@ rule download_nucleotide_sequences:
     output:
         dir=directory("results/{pdb_id}/nucleotide_sequences/"),
         combined_sequences="results/{pdb_id}/nucleotide_sequences/combined.fasta",
+    threads: config["threads"]
     conda:
         "envs/biopython.yaml"
     script:
@@ -109,6 +113,7 @@ rule align_protein_structures:
         "results/{pdb_id}/structural_alignment/alignment.log",
         "results/{pdb_id}/structural_alignment/.done",
         dir=directory("results/{pdb_id}/structural_alignment/"),
+    threads: config["threads"]
     singularity:
         "docker://f1lem0n/usalign:latest"
     params:
@@ -142,6 +147,7 @@ rule align_nucleotide_sequences:
         "results/{pdb_id}/nucleotide_alignment/alignment.log",
         alignment="results/{pdb_id}/nucleotide_alignment/alignment.txt",
         dir=directory("results/{pdb_id}/nucleotide_alignment/"),
+    threads: config["threads"]
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
     shell:
@@ -151,6 +157,41 @@ rule align_nucleotide_sequences:
         """
 
 
+rule predict_separate_RNA_structures:
+    input:
+        Path(rules.download_nucleotide_sequences.output.dir).absolute(),
+    output:
+        "results/{pdb_id}/separate_RNA_structures/.done",
+        dir=directory(Path("results/{pdb_id}/separate_RNA_structures/").absolute()),
+    threads: config["threads"]
+    conda:
+        "envs/viennaRNA.yaml"
+    params:
+        args_string=config["RNAfold"]["args_string"],
+        dpi=config["plots"]["dpi"],
+        mountain_script=Path("workflow/scripts/mountain.pl").absolute(),
+        relplot_script=Path("workflow/scripts/relplot.pl").absolute(),
+    shell:
+        """
+        for f in $(ls {input}/*.fasta); do
+            if [[ $f =~ "combined" ]]; then continue; fi
+            sample=$(basename --suffix=".fasta" $f)
+            mkdir -p {output.dir}/$sample
+            cd {output.dir}/$sample \
+            && RNAfold {params.args_string} < $f &> MFE \
+            && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+                -sOutputFile=$sample"_dp".png $sample"_dp.ps" \
+            && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+                -sOutputFile=$sample"_ss".png $sample"_ss.ps" \
+            && perl {params.mountain_script} $sample"_dp.ps" > mountain.tsv \
+            || echo "ERROR: RNAfold limits exceeded" > MFE
+        done
+        touch .done
+        """
+        # && perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
+        #     > $sample"_ss".ps \
+
+
 rule predict_consensus_RNA_structure:
     input:
         Path(rules.align_nucleotide_sequences.output.alignment).absolute(),
@@ -158,6 +199,7 @@ rule predict_consensus_RNA_structure:
         "results/{pdb_id}/consensus_RNA_structure/MFE",
         "results/{pdb_id}/consensus_RNA_structure/.done",
         dir=directory("results/{pdb_id}/consensus_RNA_structure/"),
+    threads: config["threads"]
     conda:
         "envs/viennaRNA.yaml"
     params:
@@ -188,6 +230,7 @@ rule downstream_analysis:
         "results/{pdb_id}/structural_alignment/alignment.log",
     output:
         "results/{pdb_id}/downstream_analysis/.done",
+    threads: config["threads"]
     conda:
         "envs/dplyr.yaml"
     script:

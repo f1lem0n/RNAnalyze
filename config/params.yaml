@@ -1,7 +1,7 @@
 email: your@email.com
+threads: 12
 blast:
   e_value: 1e-100
-  threads: 12
   outfmt: 6
 USalign: # see USalign -h
   split: 0
@@ -10,3 +10,5 @@ plots:
   dpi: 300
 RNAalifold:
   args_string: -p -r -d2 --noLP --color --aln
+RNAfold:
+  args_string: -p -d2 --noLP

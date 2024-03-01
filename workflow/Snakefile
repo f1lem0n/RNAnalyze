@@ -1,38 +1,87 @@
 from pathlib import Path
+from snakemake.utils import min_version
+
+
+###
+
+
+min_version("8.4.8")
 
 
 configfile: "config/params.yaml"
+
+
+onsuccess:
+    print("Workflow finished succesfuly!")
+    if config["send_email"]:
+        shell(
+            'mail -s "Workflow finished successfuly!" ' + config["email"] + " < {log}"
+        )
+
+
+onerror:
+    print("An error occurred!")
+    if config["send_email"]:
+        shell('mail -s "An error occurred!" ' + config["email"] + " < {log}")
+
+
+###
+
+
+def aggregate_input(wildcards):
+    """
+    Aggregate input files for the downstream analysis rule
+    after the checkpoint has been executed.
+    """
+    checkpoint_output = checkpoints.find_structural_homologs_SCOPe.get(
+        **wildcards
+    ).output[0]
+    with open(checkpoint_output) as f:
+        homologs = f.read().splitlines()
+    aggregated_input = []
+    aggregated_input += expand(
+        "results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",
+        pdb_id=wildcards.pdb_id,
+        homolog=homologs,
+    )
+    aggregated_input += expand(
+        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
+        pdb_id=wildcards.pdb_id,
+        homolog=homologs,
+    )
+    aggregated_input += expand(
+        "results/{pdb_id}/structural_homologs.txt",
+        pdb_id=wildcards.pdb_id,
+    )
+    aggregated_input += expand(
+        "results/{pdb_id}/protein_sequences/combined.fasta",
+        pdb_id=wildcards.pdb_id,
+    )
+    aggregated_input += expand(
+        "results/{pdb_id}/structural_alignment/alignment.txt",
+        pdb_id=wildcards.pdb_id,
+    )
+    return aggregated_input
 
 
 # Determine the PDB IDs to process
 with open("resources/list.txt") as f:
     PDB_IDs = f.read().lower().splitlines()
 
-print(f"PDB IDs: {PDB_IDs}")
-
 
 rule all:
     input:
-        expand("results/{pdb_id}/structural_homologs.txt", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/protein_sequences/combined.fasta", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/protein_sequences/.done", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/protein_structures/.done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/tblastn_results.txt", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/structural_alignment/alignment.log", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/nucleotide_alignment/alignment.log", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/nucleotide_alignment/alignment.txt", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/consensus_RNA_structure/MFE", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/consensus_RNA_structure/.done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/separate_RNA_structures/.done", pdb_id=PDB_IDs),
 
 
-rule find_structural_homologs_SCOPe:
+checkpoint find_structural_homologs_SCOPe:
     input:
         "resources/dir.cla.scope.2.08-stable.tsv",
     output:
         "results/{pdb_id}/structural_homologs.txt",
-    threads: config["threads"]
+    threads: workflow.cores
     shell:
         """
         category=$(cat {input} | grep {wildcards.pdb_id} \
@@ -48,7 +97,7 @@ rule find_structural_homologs_SCOPe:
         """
 
 
-rule get_protein_sequences_and_structures:
+rule download_protein_sequences_and_structures:
     input:
         rules.find_structural_homologs_SCOPe.output,
     output:
@@ -57,7 +106,7 @@ rule get_protein_sequences_and_structures:
         sequences=directory("results/{pdb_id}/protein_sequences"),
         structures=directory("results/{pdb_id}/protein_structures"),
         combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
-    threads: config["threads"]
+    threads: workflow.cores
     shell:
         """
         for e in $(cat {input}); do
@@ -72,48 +121,15 @@ rule get_protein_sequences_and_structures:
         """
 
 
-rule tblastn_protein_sequences:
-    input:
-        rules.get_protein_sequences_and_structures.output.combined_sequences,
-    output:
-        "results/{pdb_id}/tblastn_results.txt",
-    singularity:
-        "docker://ncbi/blast"
-    threads: config["threads"]
-    params:
-        evalue=config["blast"]["e_value"],
-    shell:
-        """
-        BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
-
-        tblastn -query {input} -out {output} \
-            -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
-            -num_threads {threads} -db refseq_rna
-        """
-
-
-rule download_nucleotide_sequences:
-    input:
-        "results/{pdb_id}/tblastn_results.txt",
-    output:
-        dir=directory("results/{pdb_id}/nucleotide_sequences/"),
-        combined_sequences="results/{pdb_id}/nucleotide_sequences/combined.fasta",
-    threads: config["threads"]
-    conda:
-        "envs/biopython.yaml"
-    script:
-        "scripts/download_nucleotide_sequences.py"
-
-
 rule align_protein_structures:
     input:
         homologs=rules.find_structural_homologs_SCOPe.output,
-        dir=rules.get_protein_sequences_and_structures.output.structures,
+        dir=rules.download_protein_sequences_and_structures.output.structures,
     output:
-        "results/{pdb_id}/structural_alignment/alignment.log",
+        "results/{pdb_id}/structural_alignment/alignment.txt",
         "results/{pdb_id}/structural_alignment/.done",
         dir=directory("results/{pdb_id}/structural_alignment/"),
-    threads: config["threads"]
+    threads: workflow.cores
     singularity:
         "docker://f1lem0n/usalign:latest"
     params:
@@ -124,7 +140,7 @@ rule align_protein_structures:
         # Run USalign
         USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
-            -split {params.split} > {output.dir}/alignment.log
+            -split {params.split} > {output.dir}/alignment.txt
 
         # Remove non-ATOM lines from superposed PDB files
         for s in $(find {output.dir} -name "sup*.pdb"); do
@@ -140,79 +156,111 @@ rule align_protein_structures:
         """
 
 
+# TODO
+# make a rule to ensure there are only protein sequences in the combined file
+rule tblastn_protein_sequences:
+    input:
+        rules.download_protein_sequences_and_structures.output.combined_sequences,
+    output:
+        "results/{pdb_id}/tblastn_results.txt",
+    singularity:
+        "docker://ncbi/blast"
+    params:
+        evalue=config["blast"]["e_value"],
+    threads: workflow.cores
+    shell:
+        """
+        BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
+
+        tblastn -query {input} -out {output} \
+            -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
+            -num_threads {threads} -db refseq_rna
+        """
+
+
+rule download_nucleotide_sequences:
+    input:
+        rules.tblastn_protein_sequences.output,
+    output:
+        dir=directory("results/{pdb_id}/nucleotide_sequences/{homolog}"),
+        combined_sequences="results/{pdb_id}/nucleotide_sequences/{homolog}/combined.fasta",
+    conda:
+        "envs/biopython.yaml"
+    threads: workflow.cores
+    script:
+        "scripts/download_nucleotide_sequences.py"
+
+
 rule align_nucleotide_sequences:
     input:
         rules.download_nucleotide_sequences.output.combined_sequences,
     output:
-        "results/{pdb_id}/nucleotide_alignment/alignment.log",
-        alignment="results/{pdb_id}/nucleotide_alignment/alignment.txt",
-        dir=directory("results/{pdb_id}/nucleotide_alignment/"),
-    threads: config["threads"]
+        alignment="results/{pdb_id}/nucleotide_alignments/{homolog}/alignment.txt",
+        dir=directory("results/{pdb_id}/nucleotide_alignments/{homolog}"),
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
+    threads: workflow.cores
     shell:
         """
-        clustalw -INFILE={input} -OUTFILE={output.dir}/alignment.txt \
-            > {output.dir}/alignment.log
+        clustalw -INFILE={input} -OUTFILE={output.alignment} \
+        || echo "ERROR: clustalw failed" > {output.alignment}
         """
 
 
 rule predict_separate_RNA_structures:
     input:
-        Path(rules.download_nucleotide_sequences.output.dir).absolute(),
+        rules.download_nucleotide_sequences.output.combined_sequences,
     output:
-        "results/{pdb_id}/separate_RNA_structures/.done",
-        dir=directory(Path("results/{pdb_id}/separate_RNA_structures/").absolute()),
-    threads: config["threads"]
+        "results/{pdb_id}/separate_RNA_structures/{homolog}/.done",
+        mfe="results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",
+        dir=directory("results/{pdb_id}/separate_RNA_structures/{homolog}"),
     conda:
         "envs/viennaRNA.yaml"
     params:
-        args_string=config["RNAfold"]["args_string"],
-        dpi=config["plots"]["dpi"],
+        args_string=config["RNAfold"],
+        dpi=config["plots"]["DPI"],
         mountain_script=Path("workflow/scripts/mountain.pl").absolute(),
         relplot_script=Path("workflow/scripts/relplot.pl").absolute(),
+    threads: workflow.cores
     shell:
         """
-        for f in $(ls {input}/*.fasta); do
-            if [[ $f =~ "combined" ]]; then continue; fi
-            sample=$(basename --suffix=".fasta" $f)
-            mkdir -p {output.dir}/$sample
-            cd {output.dir}/$sample \
-            && RNAfold {params.args_string} < $f &> MFE \
-            && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-                -sOutputFile=$sample"_dp".png $sample"_dp.ps" \
-            && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-                -sOutputFile=$sample"_ss".png $sample"_ss.ps" \
-            && perl {params.mountain_script} $sample"_dp.ps" > mountain.tsv \
-            || echo "ERROR: RNAfold limits exceeded" > MFE
-        done
+        input=$(pwd)/{input}
+        cd {output.dir}
+        RNAfold {params.args_string} -j {threads} -i $input > MFEs.txt && \
+        mkdir -p structures && \
+        mkdir -p dotplots && \
+        for f in $(ls *_dp.ps); do
+            sample=$(basename --suffix="_dp.ps" $f)
+            perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
+                > $sample"_css".ps
+            perl {params.mountain_script} $sample"_dp.ps" > mountain.tsv
+            gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+                -sOutputFile=dotplots/$sample"_dp".png $sample"_dp.ps"
+            gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
+                -sOutputFile=structures/$sample"_css".png $sample"_css.ps"
+        done || touch MFEs.txt \
         touch .done
+        cd -
         """
-        # TODO
-        # this should colour the plot according to the consensus structure
-        # but does not work correctly yet
-        # && perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
-        #     > $sample"_ss".ps \
 
 
 rule predict_consensus_RNA_structure:
     input:
-        Path(rules.align_nucleotide_sequences.output.alignment).absolute(),
+        rules.align_nucleotide_sequences.output.alignment,
     output:
-        "results/{pdb_id}/consensus_RNA_structure/MFE",
-        "results/{pdb_id}/consensus_RNA_structure/.done",
-        dir=directory("results/{pdb_id}/consensus_RNA_structure/"),
-    threads: config["threads"]
+        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
+        dir=directory("results/{pdb_id}/consensus_RNA_structures/{homolog}"),
     conda:
         "envs/viennaRNA.yaml"
     params:
-        args_string=config["RNAalifold"]["args_string"],
-        dpi=config["plots"]["dpi"],
+        args_string=config["RNAalifold"],
+        dpi=config["plots"]["DPI"],
         mountain_script=Path("workflow/scripts/cmount.pl").absolute(),
+    threads: workflow.cores
     shell:
         """
-        cd {output.dir} && RNAalifold {params.args_string} \
-            < {input} > MFE \
+        cd {output.dir}
+        RNAalifold {params.args_string} < {input} > MFEs.txt \
         && perl {params.mountain_script} alidot.ps > mountain.ps \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
             -sOutputFile=alidot.png alidot.ps \
@@ -220,21 +268,18 @@ rule predict_consensus_RNA_structure:
             -sOutputFile=alirna.png alirna.ps \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
             -sOutputFile=mountain.png mountain.ps \
-        || echo "ERROR: RNAalifold limits exceeded" > MFE
-        touch .done
+        || touch MFEs.txt
+        cd -
         """
 
 
 rule downstream_analysis:
     input:
-        "results/{pdb_id}/structural_homologs.txt",
-        "results/{pdb_id}/protein_sequences/combined.fasta",
-        "results/{pdb_id}/tblastn_results.txt",
-        "results/{pdb_id}/structural_alignment/alignment.log",
+        aggregate_input,
     output:
         "results/{pdb_id}/downstream_analysis/.done",
-    threads: config["threads"]
     conda:
         "envs/dplyr.yaml"
+    threads: workflow.cores
     script:
         "scripts/downstream_analysis.R"

@@ -7,3 +7,4 @@
 - [X] find out if it is possible to automate RNAalifold and RNAfold
 - [ ] fill downstream analysis script
 - [ ] update README.md
+- [ ] fix download_nucleotide_sequences

@@ -121,6 +121,21 @@ rule download_protein_sequences_and_structures:
         """
 
 
+rule filter_protein_sequences:
+    """
+    Remove non-protein sequences from the combined file.
+    """
+    input:
+        rules.download_protein_sequences_and_structures.output.combined_sequences,
+    output:
+        filtered="results/{pdb_id}/protein_sequences/filtered_combined.fasta",
+    conda:
+        "envs/biopython.yaml"
+    threads: workflow.cores
+    script:
+        "scripts/filter_protein_sequences.py"
+
+
 rule align_protein_structures:
     input:
         homologs=rules.find_structural_homologs_SCOPe.output,
@@ -150,17 +165,15 @@ rule align_protein_structures:
         done
 
         # Clean up and create .done file
-        rm *.pml
-        rm .pdb
+        rm -f *.pml
+        rm -f .pdb
         touch {output.dir}/.done
         """
 
 
-# TODO
-# make a rule to ensure there are only protein sequences in the combined file
 rule tblastn_protein_sequences:
     input:
-        rules.download_protein_sequences_and_structures.output.combined_sequences,
+        rules.filter_protein_sequences.output,
     output:
         "results/{pdb_id}/tblastn_results.txt",
     singularity:
@@ -168,13 +181,15 @@ rule tblastn_protein_sequences:
     params:
         evalue=config["blast"]["e_value"],
     threads: workflow.cores
+    log:
+        "logs/{pdb_id}/tblastn.log",
     shell:
         """
         BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
 
         tblastn -query {input} -out {output} \
             -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
-            -num_threads {threads} -db refseq_rna
+            -num_threads {threads} -db refseq_rna &> {log}
         """
 
 
@@ -200,9 +215,11 @@ rule align_nucleotide_sequences:
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
     threads: workflow.cores
+    log:
+        "logs/{pdb_id}/align_nucleotide_sequences_{homolog}.log",
     shell:
         """
-        clustalw -INFILE={input} -OUTFILE={output.alignment} \
+        clustalw -INFILE={input} -OUTFILE={output.alignment} &> {log} \
         || echo "ERROR: clustalw failed" > {output.alignment}
         """
 
@@ -222,11 +239,13 @@ rule predict_separate_RNA_structures:
         mountain_script=Path("workflow/scripts/mountain.pl").absolute(),
         relplot_script=Path("workflow/scripts/relplot.pl").absolute(),
     threads: workflow.cores
+    log:
+        "logs/{pdb_id}/predict_separate_RNA_structures_{homolog}.log",
     shell:
         """
         input=$(pwd)/{input}
         cd {output.dir}
-        RNAfold {params.args_string} -j {threads} -i $input > MFEs.txt && \
+        RNAfold {params.args_string} -j {threads} -i $input > MFEs.txt 2> {log} && \
         mkdir -p structures && \
         mkdir -p dotplots && \
         for f in $(ls *_dp.ps); do
@@ -235,9 +254,9 @@ rule predict_separate_RNA_structures:
                 > $sample"_css".ps
             perl {params.mountain_script} $sample"_dp.ps" > mountain.tsv
             gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-                -sOutputFile=dotplots/$sample"_dp".png $sample"_dp.ps"
+                -sOutputFile=dotplots/$sample"_dp".png $sample"_dp.ps" &>> {log}
             gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-                -sOutputFile=structures/$sample"_css".png $sample"_css.ps"
+                -sOutputFile=structures/$sample"_css".png $sample"_css.ps" &>> {log}
         done || touch MFEs.txt \
         touch .done
         cd -
@@ -257,17 +276,19 @@ rule predict_consensus_RNA_structure:
         dpi=config["plots"]["DPI"],
         mountain_script=Path("workflow/scripts/cmount.pl").absolute(),
     threads: workflow.cores
+    log:
+        "logs/{pdb_id}/predict_consensus_RNA_structure_{homolog}.log",
     shell:
         """
         cd {output.dir}
-        RNAalifold {params.args_string} < {input} > MFEs.txt \
+        RNAalifold {params.args_string} < {input} > MFEs.txt 2> {log} \
         && perl {params.mountain_script} alidot.ps > mountain.ps \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-            -sOutputFile=alidot.png alidot.ps \
+            -sOutputFile=alidot.png alidot.ps &>> {log} \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-            -sOutputFile=alirna.png alirna.ps \
+            -sOutputFile=alirna.png alirna.ps &>> {log} \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
-            -sOutputFile=mountain.png mountain.ps \
+            -sOutputFile=mountain.png mountain.ps &>> {log} \
         || touch MFEs.txt
         cd -
         """

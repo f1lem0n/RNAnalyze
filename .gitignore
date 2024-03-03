@@ -2,6 +2,7 @@
 .parallel/
 WIP/
 results/
+benchmarks/
 logs/
 swissprot/
 refseq_rna/

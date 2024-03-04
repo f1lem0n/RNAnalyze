@@ -290,9 +290,8 @@ rule predict_separate_RNA_structures:
         mkdir -p dotplots && \
         for f in $(ls *_dp.ps 2>> {log}); do
             sample=$(basename --suffix="_dp.ps" $f)
-            perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
-                > $sample"_css".ps
-            perl {params.mountain_script} $sample"_dp.ps" > mountain.tsv
+            perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" > $sample"_css".ps
+            perl {params.mountain_script} $sample"_dp.ps" > $sample".mount"
             gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
                 -sOutputFile=dotplots/$sample"_dp".png $sample"_dp.ps" &>> {log}
             gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \

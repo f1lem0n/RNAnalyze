@@ -36,6 +36,10 @@ def get_sequence_filepaths(directory: str) -> list:
 
 
 def write_chunks_to_files(chunks: list, rec, directory: str) -> None:
+    if len(chunks) == 1:
+        with open(f"{directory}/{rec.id}.fasta", "w") as handle:
+            SeqIO.write(rec, handle, "fasta")
+        return
     for idx, chunk in enumerate(chunks):
         temp_rec = SeqIO.SeqRecord(seq=chunk)
         temp_rec.id = f"{rec.id}_chunk{idx}"

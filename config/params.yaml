@@ -1,5 +1,8 @@
 email: your@email.com
 send_email: False
+split_long_nucleotide_sequences:
+  threshold: 3000
+  chunk_size: 1500
 RNAalifold: -p -r -d2 --noLP --color --aln
 RNAfold: -p -d2 --noLP
 blast:

@@ -4,22 +4,18 @@ from subprocess import run
 from time import sleep
 
 
-def parse_accession_numbers(input: Path) -> list:
-    segregated_accessions = {}
+def batch_download(input: Path, output: Path) -> None:
     with open(input, "r") as f:
-        table = f.readlines()
-    for row in table:
-        pdb_id, ncbi_accession = row.split("\t")[:2]
-        pdb_id = pdb_id.split("_")[0].lower()
-        if pdb_id not in segregated_accessions:
-            segregated_accessions[pdb_id] = [ncbi_accession]
-        else:
-            segregated_accessions[pdb_id].append(ncbi_accession)
-    return segregated_accessions
+        blast_table = f.readlines()
+    for line in blast_table:
+        accession_number = line.split("\t")[1]
+        homolog = line.split("\t")[0].split("_")[0].lower()
+        if homolog in str(output):
+            download_sequence(accession_number, output)
+    combine_sequences(output)
 
 
 def download_sequence(accession_number: str, output: Path) -> None:
-    print(f"Downloading {accession_number} --> {output}")
     with Entrez.efetch(
         db="nucleotide",
         rettype="fasta",
@@ -32,37 +28,16 @@ def download_sequence(accession_number: str, output: Path) -> None:
 
 
 def combine_sequences(output: Path) -> None:
-    print("Combining sequences...")
     run(
-        f"cat {output}/*.fasta > {output}/combined.fasta",
+        f"cat {output}/*.fasta > {output}/combined.fasta "
+        f"|| touch {output}/combined.fasta",
         shell=True,
     )
 
 
-def batch_download(segregated_accessions: dict, output: Path) -> None:
-    # Batch download sequences
-    for homolog, accessions in segregated_accessions.items():
-        if homolog not in str(output):
-            continue
-        for a in set(accessions):
-            download_sequence(a, output)
-        combine_sequences(output)
-
-    # if there are no sequences for a homolog, create placeholder files
-    # this is crucial for the pipeline to not fail on subsequent rules
-    for homolog, _ in segregated_accessions.items():
-        if homolog not in list(output.iterdir()):
-            (output / homolog).mkdir()
-            with open(output / "combined.fasta", "w") as f:
-                f.write("")
-
-
 def main():
     Entrez.email = snakemake.config["email"]
-    input = Path(snakemake.input[0])
-    output = Path(snakemake.output.dir)
-    segregated_accessions = parse_accession_numbers(input)
-    batch_download(segregated_accessions, output)
+    batch_download(Path(snakemake.input[0]), Path(snakemake.output[0]))
 
 
 if __name__ == "__main__":

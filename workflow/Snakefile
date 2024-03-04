@@ -44,17 +44,17 @@ def aggregate_input(wildcards):
         pdb_id=wildcards.pdb_id,
         homolog=homologs,
     )
-    aggregated_input += expand(
-        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
-        pdb_id=wildcards.pdb_id,
-        homolog=homologs,
-    )
+    # aggregated_input += expand(
+    #     "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
+    #     pdb_id=wildcards.pdb_id,
+    #     homolog=homologs,
+    # )
     aggregated_input += expand(
         "results/{pdb_id}/structural_homologs.txt",
         pdb_id=wildcards.pdb_id,
     )
     aggregated_input += expand(
-        "results/{pdb_id}/protein_sequences/combined.fasta",
+        "results/{pdb_id}/protein_sequences/filtered_combined.fasta",
         pdb_id=wildcards.pdb_id,
     )
     aggregated_input += expand(
@@ -71,8 +71,6 @@ with open("resources/list.txt") as f:
 
 rule all:
     input:
-        expand("results/{pdb_id}/protein_sequences/.done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/protein_structures/.done", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
 
 
@@ -82,7 +80,7 @@ checkpoint find_structural_homologs_SCOPe:
     output:
         "results/{pdb_id}/structural_homologs.txt",
     benchmark:
-        "benchmarks/{pdb_id}/find_structural_homologs_SCOPe.txt"
+        Path("benchmarks/{pdb_id}/find_structural_homologs_SCOPe.txt").absolute()
     threads: workflow.cores
     shell:
         """
@@ -109,7 +107,9 @@ rule download_protein_sequences_and_structures:
         structures=directory("results/{pdb_id}/protein_structures"),
         combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
     benchmark:
-        "benchmarks/{pdb_id}/download_protein_sequences_and_structures.txt"
+        Path(
+            "benchmarks/{pdb_id}/download_protein_sequences_and_structures.txt"
+        ).absolute()
     threads: workflow.cores
     shell:
         """
@@ -134,7 +134,7 @@ rule filter_protein_sequences:
     output:
         filtered="results/{pdb_id}/protein_sequences/filtered_combined.fasta",
     benchmark:
-        "benchmarks/{pdb_id}/filtered_protein_sequences.txt"
+        Path("benchmarks/{pdb_id}/filtered_protein_sequences.txt").absolute()
     conda:
         "envs/biopython.yaml"
     threads: workflow.cores
@@ -151,9 +151,9 @@ rule align_protein_structures:
         "results/{pdb_id}/structural_alignment/.done",
         dir=directory("results/{pdb_id}/structural_alignment/"),
     log:
-        "logs/{pdb_id}/align_protein_structures.log",
+        Path("logs/{pdb_id}/align_protein_structures.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/structural_alignment.txt"
+        Path("benchmarks/{pdb_id}/structural_alignment.txt").absolute()
     params:
         split=config["USalign"]["split"],
         full=config["USalign"]["full"],
@@ -187,9 +187,9 @@ rule tblastn_protein_sequences:
     output:
         "results/{pdb_id}/tblastn_results.txt",
     log:
-        "logs/{pdb_id}/tblastn_protein_sequences.log",
+        Path("logs/{pdb_id}/tblastn_protein_sequences.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/tblastn_protein_sequences.txt"
+        Path("benchmarks/{pdb_id}/tblastn_protein_sequences.txt").absolute()
     params:
         evalue=config["blast"]["e_value"],
     singularity:
@@ -212,7 +212,7 @@ rule download_nucleotide_sequences:
         dir=directory("results/{pdb_id}/nucleotide_sequences/{homolog}"),
         combined_sequences="results/{pdb_id}/nucleotide_sequences/{homolog}/combined.fasta",
     benchmark:
-        "benchmarks/{pdb_id}/nucleotide_sequences_{homolog}.txt"
+        Path("benchmarks/{pdb_id}/nucleotide_sequences_{homolog}.txt").absolute()
     conda:
         "envs/biopython.yaml"
     threads: workflow.cores
@@ -227,30 +227,50 @@ rule align_nucleotide_sequences:
         alignment="results/{pdb_id}/nucleotide_alignments/{homolog}/alignment.txt",
         dir=directory("results/{pdb_id}/nucleotide_alignments/{homolog}"),
     log:
-        "logs/{pdb_id}/align_nucleotide_sequences_{homolog}.log",
+        Path("logs/{pdb_id}/align_nucleotide_sequences_{homolog}.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/nucleotide_alignments_{homolog}.txt"
+        Path("benchmarks/{pdb_id}/nucleotide_alignments_{homolog}.txt").absolute()
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
     threads: workflow.cores
     shell:
         """
         clustalw -INFILE={input} -OUTFILE={output.alignment} &> {log} \
-        || echo "ERROR: clustalw failed" > {output.alignment}
+        || touch {output.alignment}
         """
+
+
+rule split_long_nucleotide_sequences:
+    input:
+        rules.download_nucleotide_sequences.output.dir,
+    output:
+        "results/{pdb_id}/split_nucleotide_sequences/{homolog}/.done",
+        dir=directory("results/{pdb_id}/split_nucleotide_sequences/{homolog}"),
+    log:
+        Path("logs/{pdb_id}/split_nucleotide_sequences_{homolog}.log").absolute(),
+    benchmark:
+        Path("benchmarks/{pdb_id}/split_nucleotide_sequences_{homolog}.txt").absolute()
+    params:
+        threshold=config["split_long_nucleotide_sequences"]["threshold"],
+        chunk_size=config["split_long_nucleotide_sequences"]["chunk_size"],
+    conda:
+        "envs/biopython.yaml"
+    threads: workflow.cores
+    script:
+        "scripts/split_long_nucleotide_sequences.py"
 
 
 rule predict_separate_RNA_structures:
     input:
-        rules.download_nucleotide_sequences.output.combined_sequences,
+        rules.split_long_nucleotide_sequences.output.dir,
     output:
         "results/{pdb_id}/separate_RNA_structures/{homolog}/.done",
         mfe="results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",
         dir=directory("results/{pdb_id}/separate_RNA_structures/{homolog}"),
     log:
-        "logs/{pdb_id}/predict_separate_RNA_structures_{homolog}.log",
+        Path("logs/{pdb_id}/predict_separate_RNA_structures_{homolog}.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/separate_RNA_structures_{homolog}.txt"
+        Path("benchmarks/{pdb_id}/separate_RNA_structures_{homolog}.txt").absolute()
     params:
         args_string=config["RNAfold"],
         dpi=config["plots"]["DPI"],
@@ -263,10 +283,12 @@ rule predict_separate_RNA_structures:
         """
         input=$(pwd)/{input}
         cd {output.dir}
-        RNAfold {params.args_string} -j {threads} -i $input > MFEs.txt 2> {log} && \
+        for f in $(ls $input/*.fasta 2> {log}); do
+            RNAfold {params.args_string} -i $f -o 2>> {log}
+        done
         mkdir -p structures && \
         mkdir -p dotplots && \
-        for f in $(ls *_dp.ps); do
+        for f in $(ls *_dp.ps 2>> {log}); do
             sample=$(basename --suffix="_dp.ps" $f)
             perl {params.relplot_script} $sample"_ss.ps" $sample"_dp.ps" \
                 > $sample"_css".ps
@@ -275,9 +297,9 @@ rule predict_separate_RNA_structures:
                 -sOutputFile=dotplots/$sample"_dp".png $sample"_dp.ps" &>> {log}
             gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
                 -sOutputFile=structures/$sample"_css".png $sample"_css.ps" &>> {log}
-        done || touch MFEs.txt \
+        done && cat *.fold > MFEs.txt 2>> {log} || touch MFEs.txt
         touch .done
-        cd -
+        cd - &>> {log}
         """
 
 
@@ -288,9 +310,9 @@ rule predict_consensus_RNA_structure:
         "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
         dir=directory("results/{pdb_id}/consensus_RNA_structures/{homolog}"),
     log:
-        "logs/{pdb_id}/predict_consensus_RNA_structure_{homolog}.log",
+        Path("logs/{pdb_id}/predict_consensus_RNA_structure_{homolog}.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/consensus_RNA_structures_{homolog}.txt"
+        Path("benchmarks/{pdb_id}/consensus_RNA_structures_{homolog}.txt").absolute()
     params:
         args_string=config["RNAalifold"],
         dpi=config["plots"]["DPI"],
@@ -300,8 +322,9 @@ rule predict_consensus_RNA_structure:
     threads: workflow.cores
     shell:
         """
+        input=$(pwd)/{input}
         cd {output.dir}
-        RNAalifold {params.args_string} < {input} > MFEs.txt 2> {log} \
+        RNAalifold {params.args_string} < $input > MFEs.txt 2> {log} \
         && perl {params.mountain_script} alidot.ps > mountain.ps \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
             -sOutputFile=alidot.png alidot.ps &>> {log} \
@@ -320,9 +343,9 @@ rule downstream_analysis:
     output:
         "results/{pdb_id}/downstream_analysis/.done",
     log:
-        "logs/{pdb_id}/downstream_analysis.log",
+        Path("logs/{pdb_id}/downstream_analysis.log").absolute(),
     benchmark:
-        "benchmarks/{pdb_id}/downstream_analysis.txt"
+        Path("benchmarks/{pdb_id}/downstream_analysis.txt").absolute()
     conda:
         "envs/dplyr.yaml"
     threads: workflow.cores

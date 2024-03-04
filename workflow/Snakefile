@@ -211,6 +211,8 @@ rule download_nucleotide_sequences:
     output:
         dir=directory("results/{pdb_id}/nucleotide_sequences/{homolog}"),
         combined_sequences="results/{pdb_id}/nucleotide_sequences/{homolog}/combined.fasta",
+    log:
+        Path("logs/{pdb_id}/download_nucleotide_sequences_{homolog}.log").absolute(),
     benchmark:
         Path("benchmarks/{pdb_id}/nucleotide_sequences_{homolog}.txt").absolute()
     conda:

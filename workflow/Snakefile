@@ -44,11 +44,11 @@ def aggregate_input(wildcards):
         pdb_id=wildcards.pdb_id,
         homolog=homologs,
     )
-    # aggregated_input += expand(
-    #     "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
-    #     pdb_id=wildcards.pdb_id,
-    #     homolog=homologs,
-    # )
+    aggregated_input += expand(
+        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
+        pdb_id=wildcards.pdb_id,
+        homolog=homologs,
+    )
     aggregated_input += expand(
         "results/{pdb_id}/structural_homologs.txt",
         pdb_id=wildcards.pdb_id,
@@ -333,7 +333,7 @@ rule predict_consensus_RNA_structure:
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
             -sOutputFile=mountain.png mountain.ps &>> {log} \
         || touch MFEs.txt
-        cd -
+        cd - &>> {log}
         """
 
 

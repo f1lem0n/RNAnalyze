@@ -8,7 +8,7 @@ RNAfold: -p -d2 --noLP
 blast:
   e_value: 1e-100
   outfmt: 6
-USalign: # see USalign -h
+USalign:
   split: 0
   full: T
 plots:

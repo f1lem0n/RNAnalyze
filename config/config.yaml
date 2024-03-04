@@ -1,13 +1,15 @@
-snakefile: workflow/Snakefile
 cores: 12
 jobs: 4
-rerun-incomplete: True
-nolock: True
-use-singularity: True
-use-conda: True
-conda-frontend: conda
+restart-times: 1
 latency-wait: 60
 show-failed-logs: True
-keep-going: True
 printshellcmds: True
-restart-times: 1
+
+# DO NOT change the following settings
+snakefile: workflow/Snakefile
+nolock: True
+use-conda: True
+keep-going: True
+conda-frontend: conda
+use-singularity: True
+rerun-incomplete: True

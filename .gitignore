@@ -6,4 +6,6 @@ benchmarks/
 logs/
 swissprot/
 refseq_rna/
+__pycache__/
 *.zip
+*.pyc

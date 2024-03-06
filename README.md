@@ -11,7 +11,7 @@ longer description (TODO)
 
 ## Setup
 
-### Prerequisites:
+### Prerequisites
 
 - [Git](https://git-scm.com/)
 - [Conda](https://docs.conda.io/en/latest/miniconda.html)

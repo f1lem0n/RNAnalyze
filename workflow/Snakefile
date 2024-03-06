@@ -352,6 +352,7 @@ rule downstream_analysis:
         aggregate_input,
     output:
         "results/{pdb_id}/downstream_analysis/.done",
+        dir=directory("results/{pdb_id}/downstream_analysis/"),
     log:
         Path("logs/{pdb_id}/downstream_analysis.log").absolute(),
     benchmark:

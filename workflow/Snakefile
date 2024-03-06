@@ -49,18 +49,6 @@ def aggregate_input(wildcards):
         pdb_id=wildcards.pdb_id,
         homolog=homologs,
     )
-    aggregated_input += expand(
-        "results/{pdb_id}/structural_homologs.txt",
-        pdb_id=wildcards.pdb_id,
-    )
-    aggregated_input += expand(
-        "results/{pdb_id}/protein_sequences/filtered_combined.fasta",
-        pdb_id=wildcards.pdb_id,
-    )
-    aggregated_input += expand(
-        "results/{pdb_id}/structural_alignment/alignment.txt",
-        pdb_id=wildcards.pdb_id,
-    )
     return aggregated_input
 
 
@@ -132,7 +120,7 @@ rule filter_protein_sequences:
     input:
         rules.download_protein_sequences_and_structures.output.combined_sequences,
     output:
-        filtered="results/{pdb_id}/protein_sequences/filtered_combined.fasta",
+        "results/{pdb_id}/protein_sequences/filtered_combined.fasta",
     benchmark:
         Path("benchmarks/{pdb_id}/filtered_protein_sequences.txt").absolute()
     conda:
@@ -147,8 +135,8 @@ rule align_protein_structures:
         homologs=rules.find_structural_homologs_SCOPe.output,
         dir=rules.download_protein_sequences_and_structures.output.structures,
     output:
-        "results/{pdb_id}/structural_alignment/alignment.txt",
         "results/{pdb_id}/structural_alignment/.done",
+        alignment="results/{pdb_id}/structural_alignment/alignment.txt",
         dir=directory("results/{pdb_id}/structural_alignment/"),
     log:
         Path("logs/{pdb_id}/align_protein_structures.log").absolute(),
@@ -191,17 +179,30 @@ rule tblastn_protein_sequences:
     benchmark:
         Path("benchmarks/{pdb_id}/tblastn_protein_sequences.txt").absolute()
     params:
-        evalue=config["blast"]["e_value"],
+        matrix=config["tblastn"]["matrix"],
+        evalue=config["tblastn"]["e_value"],
+        word_size=config["tblastn"]["word_size"],
+        max_target_seqs=config["tblastn"]["max_target_seqs"],
+        additional_args=config["tblastn"]["additional_args"],
     singularity:
-        "docker://ncbi/blast"
+        "docker://ncbi/blast:2.15.0"
     threads: workflow.cores
     shell:
         """
         BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
 
-        tblastn -query {input} -out {output} \
-            -outfmt 6 -max_target_seqs 100 -evalue {params.evalue} \
-            -num_threads {threads} -db refseq_rna &> {log}
+        tblastn \
+            -query {input} \
+            -out {output} \
+            -num_threads {threads} \
+            -db refseq_rna \
+            -outfmt 6 \
+            -matrix {params.matrix} \
+            -evalue {params.evalue} \
+            -word_size {params.word_size} \
+            -max_target_seqs {params.max_target_seqs} \
+            {params.additional_args} \
+            &> {log}
         """
 
 
@@ -237,8 +238,10 @@ rule align_nucleotide_sequences:
     threads: workflow.cores
     shell:
         """
-        clustalw -INFILE={input} -OUTFILE={output.alignment} &> {log} \
-        || touch {output.alignment}
+        clustalw \
+            -INFILE={input} \
+            -OUTFILE={output.alignment} \
+            &> {log} || touch {output.alignment}
         """
 
 
@@ -286,7 +289,10 @@ rule predict_separate_RNA_structures:
         input=$(pwd)/{input}
         cd {output.dir}
         for f in $(ls $input/*.fasta 2> {log}); do
-            RNAfold {params.args_string} -i $f -o 2>> {log}
+            RNAfold \
+                {params.args_string} \
+                -i $f -o \
+                2>> {log}
         done
         mkdir -p structures && \
         mkdir -p dotplots && \
@@ -325,7 +331,9 @@ rule predict_consensus_RNA_structure:
         """
         input=$(pwd)/{input}
         cd {output.dir}
-        RNAalifold {params.args_string} < $input > MFEs.txt 2> {log} \
+        RNAalifold \
+            {params.args_string} \
+            < $input > MFEs.txt 2> {log} \
         && perl {params.mountain_script} alidot.ps > mountain.ps \
         && gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r{params.dpi} \
             -sOutputFile=alidot.png alidot.ps &>> {log} \
@@ -340,6 +348,7 @@ rule predict_consensus_RNA_structure:
 
 rule downstream_analysis:
     input:
+        rules.tblastn_protein_sequences.output,
         aggregate_input,
     output:
         "results/{pdb_id}/downstream_analysis/.done",

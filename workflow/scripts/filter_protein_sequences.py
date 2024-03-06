@@ -11,5 +11,5 @@ if __name__ == "__main__":
             continue
         else:
             filtered.append(r)
-    with open(snakemake.output.filtered, "w") as f:
+    with open(snakemake.output[0], "w") as f:
         SeqIO.write(filtered, f, "fasta")

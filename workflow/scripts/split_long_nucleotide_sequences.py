@@ -1,4 +1,5 @@
 from os import walk
+
 from Bio import SeqIO
 
 

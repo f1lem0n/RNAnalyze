@@ -38,16 +38,9 @@ binary_mtx <- outer(unique_queries, unique_subjects, Vectorize(function(x, y) {
 }))
 binary_df <- data.frame(binary_mtx, row.names = unique_queries)
 colnames(binary_df) <- unique_subjects
-if (nrow(binary_df) == 1) {
-  binary_df$query <- rownames(binary_df)
-}
-if (ncol(binary_df) == 1) {
-  binary_df$subject <- colnames(binary_df)
-}
-binary_melt <- melt(binary_df)
+binary_melt <- melt(as.matrix(binary_df))
 colnames(binary_melt) <- c("query", "subject", "hit")
 binary_melt$hit <- as.logical(binary_melt$hit)
-
 qs_heatmap <- ggplot(
   binary_melt,
   aes(x = subject, y = query, fill = hit)

@@ -1,4 +1,4 @@
-name: mgr
+name: RNAnalyze
 channels:
   - defaults
   - bioconda

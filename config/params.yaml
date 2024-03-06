@@ -2,7 +2,7 @@ email: "your@email.com"
 send_email: False
 USalign:
   split: 0
-  full: T
+  full: "T"
 tblastn:
   matrix: "BLOSUM62"
   e_value: 1e-20

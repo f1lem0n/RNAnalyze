@@ -33,9 +33,7 @@ def aggregate_input(wildcards):
     Aggregate input files for the downstream analysis rule
     after the checkpoint has been executed.
     """
-    checkpoint_output = checkpoints.find_structural_homologs_SCOPe.get(
-        **wildcards
-    ).output[0]
+    checkpoint_output = checkpoints.find_structural_homologs.get(**wildcards).output[0]
     with open(checkpoint_output) as f:
         homologs = f.read().splitlines()
     aggregated_input = []
@@ -62,13 +60,13 @@ rule all:
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
 
 
-checkpoint find_structural_homologs_SCOPe:
+checkpoint find_structural_homologs:
     input:
         "resources/dir.cla.scope.2.08-stable.tsv",
     output:
         "results/{pdb_id}/structural_homologs.txt",
     benchmark:
-        Path("benchmarks/{pdb_id}/find_structural_homologs_SCOPe.txt").absolute()
+        Path("benchmarks/{pdb_id}/find_structural_homologs.txt").absolute()
     threads: workflow.cores
     shell:
         """
@@ -87,7 +85,7 @@ checkpoint find_structural_homologs_SCOPe:
 
 rule download_protein_sequences_and_structures:
     input:
-        rules.find_structural_homologs_SCOPe.output,
+        rules.find_structural_homologs.output,
     output:
         "results/{pdb_id}/protein_sequences/.done",
         "results/{pdb_id}/protein_structures/.done",
@@ -113,6 +111,43 @@ rule download_protein_sequences_and_structures:
         """
 
 
+checkpoint find_sequence_homologs:
+    input:
+        rules.download_protein_sequences_and_structures.output.sequences
+        + "/{pdb_id}.fasta",
+    output:
+        "results/{pdb_id}/blastp_results.txt",
+    log:
+        Path("logs/{pdb_id}/find_sequence_homologs.log").absolute(),
+    benchmark:
+        Path("benchmarks/{pdb_id}/find_sequence_homologs.log").absolute()
+    params:
+        db=config["blastp"]["database"]
+        matrix=config["blastp"]["matrix"],
+        evalue=config["blastp"]["e_value"],
+        word_size=config["blastp"]["word_size"],
+        max_target_seqs=config["blastp"]["max_target_seqs"],
+        additional_args=config["blastp"]["additional_args"],
+    threads: workflow.cores
+    shell:
+        """
+        BLASTDB=$(pwd)/database/{params.db}:$BLASTDB
+
+        blastp \
+            -query {input} \
+            -out {output} \
+            -num_threads {threads} \
+            -db {params.db} \
+            -outfmt 6 \
+            -matrix {params.matrix} \
+            -evalue {params.evalue} \
+            -word_size {params.word_size} \
+            -max_target_seqs {params.max_target_seqs} \
+            {params.additional_args} \
+            &> {log}
+        """
+
+
 rule filter_protein_sequences:
     """
     Remove non-protein sequences from the combined file.
@@ -132,7 +167,7 @@ rule filter_protein_sequences:
 
 rule align_protein_structures:
     input:
-        homologs=rules.find_structural_homologs_SCOPe.output,
+        homologs=rules.find_structural_homologs.output,
         dir=rules.download_protein_sequences_and_structures.output.structures,
     output:
         "results/{pdb_id}/structural_alignment/.done",
@@ -148,10 +183,7 @@ rule align_protein_structures:
     singularity:
         "docker://f1lem0n/usalign:latest"
     threads: workflow.cores
-    shell:
-        """
-        # Run USalign
-        USalign -dir {input.dir} {input.homologs} \
+    shell: """ # Run USalign USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
             -split {params.split} > {output.dir}/alignment.txt 2> {log}
 
@@ -179,6 +211,7 @@ rule tblastn_protein_sequences:
     benchmark:
         Path("benchmarks/{pdb_id}/tblastn_protein_sequences.txt").absolute()
     params:
+        db=config["tblastn"]["database"]
         matrix=config["tblastn"]["matrix"],
         evalue=config["tblastn"]["e_value"],
         word_size=config["tblastn"]["word_size"],
@@ -189,13 +222,13 @@ rule tblastn_protein_sequences:
     threads: workflow.cores
     shell:
         """
-        BLASTDB=$(pwd)/database/refseq_rna:$BLASTDB
+        BLASTDB=$(pwd)/database/{params.db}:$BLASTDB
 
         tblastn \
             -query {input} \
             -out {output} \
             -num_threads {threads} \
-            -db refseq_rna \
+            -db {params.db} \
             -outfmt 6 \
             -matrix {params.matrix} \
             -evalue {params.evalue} \

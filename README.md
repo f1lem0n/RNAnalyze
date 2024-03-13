@@ -26,6 +26,20 @@ cd RNAanalyze
 conda env create -f environment.yml
 ```
 
+### Local database setup
+
+To use this workflow you will need to download databases for BLAST+ programs.
+To do this use `update_blastdb.pl` script located in `database` directory.
+The best way to do it would be:
+
+```
+perl update_blastdb.pl <db_name>
+mkdir <db_name>
+mv <db_name>.zip <db_name>/.
+cd <db_name>
+unzip <db_name>.zip
+```
+
 ## Usage
 
 ### Basic usage

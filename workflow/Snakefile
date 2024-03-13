@@ -57,7 +57,7 @@ with open("resources/list.txt") as f:
 
 rule all:
     input:
-        "results/{pdb_id}/structural_alignment/alignment.txt",
+        expand("results/{pdb_id}/structural_alignment/alignment.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
 
 
@@ -123,7 +123,7 @@ checkpoint find_sequence_homologs:
     benchmark:
         Path("benchmarks/{pdb_id}/find_sequence_homologs.log").absolute()
     params:
-        db=config["blastp"]["database"]
+        db=config["blastp"]["database"],
         matrix=config["blastp"]["matrix"],
         evalue=config["blastp"]["e_value"],
         word_size=config["blastp"]["word_size"],
@@ -184,7 +184,8 @@ rule align_protein_structures:
     singularity:
         "docker://f1lem0n/usalign:latest"
     threads: workflow.cores
-    shell: """ # Run USalign USalign -dir {input.dir} {input.homologs} \
+    shell:
+        """ # Run USalign USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
             -split {params.split} > {output.dir}/alignment.txt 2> {log}
 
@@ -212,7 +213,7 @@ rule tblastn_protein_sequences:
     benchmark:
         Path("benchmarks/{pdb_id}/tblastn_protein_sequences.txt").absolute()
     params:
-        db=config["tblastn"]["database"]
+        db=config["tblastn"]["database"],
         matrix=config["tblastn"]["matrix"],
         evalue=config["tblastn"]["e_value"],
         word_size=config["tblastn"]["word_size"],

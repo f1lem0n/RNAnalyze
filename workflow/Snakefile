@@ -59,6 +59,7 @@ with open("resources/list.txt") as f:
 
 rule all:
     input:
+        "results/{pdb_id}/structural_alignment/alignment.txt",
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
 
 

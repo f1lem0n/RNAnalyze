@@ -31,7 +31,7 @@ onerror:
 def aggregate_input(wildcards):
     """
     Aggregate input files for the downstream analysis rule
-    after the checkpoint has been executed.
+    after the checkpoints have been executed.
     """
 
     aggregated_input = []
@@ -82,10 +82,6 @@ HOMOLOGY_TYPES = ["from_structural_homology", "from_sequence_homology"]
 
 rule all:
     input:
-        # expand(
-        #     "results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
-        #     pdb_id=PDB_IDs,
-        # ),
         expand(
             "results/{pdb_id}/{homology_type}/downstream_analysis/.done",
             pdb_id=PDB_IDs,

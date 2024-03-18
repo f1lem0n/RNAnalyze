@@ -10,7 +10,7 @@ from logger import get_logger
 LOGGER = get_logger(str(snakemake.log))
 
 
-def batch_download(input: Path, output: Path) -> None:
+def batch_download(input: Path, output: Path, db: str) -> None:
     with open(input, "r") as f:
         blast_table = f.readlines()
     for line in blast_table:
@@ -19,19 +19,19 @@ def batch_download(input: Path, output: Path) -> None:
         start = int(line.split("\t")[8])
         stop = int(line.split("\t")[9])
         if homolog in str(output):
-            download_sequence(accession_number, start, stop, output)
+            download_sequence(accession_number, db, start, stop, output)
     combine_sequences(output)
 
 
 def download_sequence(
-    accession_number: str, start: int, stop: int, output: Path
+    accession_number: str, db: str, start: int, stop: int, output: Path
 ) -> None:
     try:
         LOGGER.info(
             f"Downloading {accession_number} ({start}:{stop}) --> {output}"
         )
         with Entrez.efetch(
-            db="nucleotide",
+            db=db,
             rettype="fasta",
             retmode="text",
             id=accession_number,
@@ -55,7 +55,11 @@ def combine_sequences(output: Path) -> None:
 
 def main():
     Entrez.email = snakemake.config["email"]
-    batch_download(Path(snakemake.input[0]), Path(snakemake.output[0]))
+    batch_download(
+        Path(snakemake.input[0]),
+        Path(snakemake.output[0]),
+        snakemake.params["db"],
+    )
 
 
 if __name__ == "__main__":

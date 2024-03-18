@@ -33,20 +33,44 @@ def aggregate_input(wildcards):
     Aggregate input files for the downstream analysis rule
     after the checkpoint has been executed.
     """
-    checkpoint_output = checkpoints.find_structural_homologs.get(**wildcards).output[0]
-    with open(checkpoint_output) as f:
-        homologs = f.read().splitlines()
+    structural_homologs_fp = checkpoints.find_structural_homologs.get(
+        **wildcards
+    ).output[0]
+
+    with open(structural_homologs_fp) as f:
+        structural_homologs = f.read().splitlines()
+
+    sequence_homologs_fp = checkpoints.find_sequence_homologs.get(
+        **wildcards
+    ).output.homologs
+
+    with open(sequence_homologs_fp) as f:
+        sequence_homologs = f.read().splitlines()
+
     aggregated_input = []
+
     aggregated_input += expand(
-        "results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",
+        "results/{pdb_id}/from_structural_homology/separate_RNA_structures/{homolog}/MFEs.txt",
         pdb_id=wildcards.pdb_id,
-        homolog=homologs,
+        homolog=structural_homologs,
     )
     aggregated_input += expand(
-        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
+        "results/{pdb_id}/from_structural_homology/consensus_RNA_structures/{homolog}/MFEs.txt",
         pdb_id=wildcards.pdb_id,
-        homolog=homologs,
+        homolog=structural_homologs,
     )
+
+    aggregated_input += expand(
+        "results/{pdb_id}/from_sequence_homology/separate_RNA_structures/{homolog}/MFEs.txt",
+        pdb_id=wildcards.pdb_id,
+        homolog=sequence_homologs,
+    )
+    aggregated_input += expand(
+        "results/{pdb_id}/from_sequence_homology/consensus_RNA_structures/{homolog}/MFEs.txt",
+        pdb_id=wildcards.pdb_id,
+        homolog=sequence_homologs,
+    )
+
     return aggregated_input
 
 
@@ -54,19 +78,32 @@ def aggregate_input(wildcards):
 with open("resources/list.txt") as f:
     PDB_IDs = f.read().lower().splitlines()
 
+HOMOLOGY_TYPES = ["from_structural_homology", "from_sequence_homology"]
+
 
 rule all:
     input:
-        expand("results/{pdb_id}/structural_alignment/alignment.txt", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
-        expand("results/{pdb_id}/blastp_results.txt", pdb_id=PDB_IDs),
+        expand(
+            "results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
+            pdb_id=PDB_IDs,
+        ),
+        expand(
+            "results/{pdb_id}/{homology_type}/downstream_analysis/.done",
+            pdb_id=PDB_IDs,
+            homology_type=HOMOLOGY_TYPES,
+        ),
+
+
+###########################
+### STRUCTURAL HOMOLOGY ###
+###########################
 
 
 checkpoint find_structural_homologs:
     input:
         "resources/dir.cla.scope.2.08-stable.tsv",
     output:
-        "results/{pdb_id}/structural_homologs.txt",
+        "results/{pdb_id}/from_structural_homology/homologs.txt",
     benchmark:
         Path("benchmarks/{pdb_id}/find_structural_homologs.txt").absolute()
     threads: workflow.cores
@@ -89,14 +126,18 @@ rule download_protein_sequences_and_structures:
     input:
         rules.find_structural_homologs.output,
     output:
-        "results/{pdb_id}/protein_sequences/.done",
-        "results/{pdb_id}/protein_structures/.done",
-        sequences=directory("results/{pdb_id}/protein_sequences"),
-        structures=directory("results/{pdb_id}/protein_structures"),
-        combined_sequences="results/{pdb_id}/protein_sequences/combined.fasta",
+        "results/{pdb_id}/from_structural_homology/protein_sequences/.done",
+        "results/{pdb_id}/from_structural_homology/protein_structures/.done",
+        sequences=directory(
+            "results/{pdb_id}/from_structural_homology/protein_sequences"
+        ),
+        structures=directory(
+            "results/{pdb_id}/from_structural_homology/protein_structures"
+        ),
+        combined_sequences="results/{pdb_id}/from_structural_homology/protein_sequences/combined.fasta",
     benchmark:
         Path(
-            "benchmarks/{pdb_id}/download_protein_sequences_and_structures.txt"
+            "benchmarks/{pdb_id}/from_structural_homology/download_protein_sequences_and_structures.txt"
         ).absolute()
     threads: workflow.cores
     shell:
@@ -113,74 +154,22 @@ rule download_protein_sequences_and_structures:
         """
 
 
-checkpoint blastp_main_protein_sequence:
-    input:
-        rules.download_protein_sequences_and_structures.output.sequences
-        + "/{pdb_id}.fasta",
-    output:
-        "results/{pdb_id}/blastp_results.txt",
-    log:
-        Path("logs/{pdb_id}/blastp_main_protein_sequence.log").absolute(),
-    benchmark:
-        Path("benchmarks/{pdb_id}/blastp_main_protein_sequence.log").absolute()
-    params:
-        db=config["blastp"]["database"],
-        matrix=config["blastp"]["matrix"],
-        evalue=config["blastp"]["e_value"],
-        word_size=config["blastp"]["word_size"],
-        max_target_seqs=config["blastp"]["max_target_seqs"],
-        additional_args=config["blastp"]["additional_args"],
-    singularity:
-        "docker://ncbi/blast:2.15.0"
-    threads: workflow.cores
-    shell:
-        """
-        BLASTDB=$(pwd)/database/{params.db}:$BLASTDB
-
-        blastp \
-            -query {input} \
-            -out {output} \
-            -num_threads {threads} \
-            -db {params.db} \
-            -outfmt 6 \
-            -matrix {params.matrix} \
-            -evalue {params.evalue} \
-            -word_size {params.word_size} \
-            -max_target_seqs {params.max_target_seqs} \
-            {params.additional_args} \
-            &> {log}
-        """
-
-
-rule filter_protein_sequences:
-    """
-    Remove non-protein sequences from the combined file.
-    """
-    input:
-        rules.download_protein_sequences_and_structures.output.combined_sequences,
-    output:
-        "results/{pdb_id}/protein_sequences/filtered_combined.fasta",
-    benchmark:
-        Path("benchmarks/{pdb_id}/filtered_protein_sequences.txt").absolute()
-    conda:
-        "envs/biopython.yaml"
-    threads: workflow.cores
-    script:
-        "scripts/filter_protein_sequences.py"
-
-
 rule align_protein_structures:
     input:
         homologs=rules.find_structural_homologs.output,
         dir=rules.download_protein_sequences_and_structures.output.structures,
     output:
-        "results/{pdb_id}/structural_alignment/.done",
-        alignment="results/{pdb_id}/structural_alignment/alignment.txt",
-        dir=directory("results/{pdb_id}/structural_alignment/"),
+        "results/{pdb_id}/from_structural_homology/structural_alignment/.done",
+        alignment="results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
+        dir=directory("results/{pdb_id}/from_structural_homology/structural_alignment/"),
     log:
-        Path("logs/{pdb_id}/align_protein_structures.log").absolute(),
+        Path(
+            "logs/{pdb_id}/from_structural_homology/align_protein_structures.log"
+        ).absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/structural_alignment.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/from_structural_homology/structural_alignment.txt"
+        ).absolute()
     params:
         split=config["USalign"]["split"],
         full=config["USalign"]["full"],
@@ -208,15 +197,146 @@ rule align_protein_structures:
         """
 
 
+#########################
+### SEQUENCE HOMOLOGY ###
+#########################
+
+
+rule get_origin_sequence:
+    output:
+        "results/{pdb_id}/from_sequence_homology/origin_sequence.fasta",
+    log:
+        Path("logs/{pdb_id}/from_sequence_homology/get_origin_sequence.log").absolute(),
+    benchmark:
+        Path(
+            "benchmarks/{pdb_id}/from_sequence_homology/get_origin_sequence.txt"
+        ).absolute()
+    threads: workflow.cores
+    shell:
+        """
+        wget https://www.rcsb.org/fasta/entry/{wildcards.pdb_id} -q \
+            -O {output} &> {log}
+        """
+
+
+rule filter_origin_sequence:
+    input:
+        rules.get_origin_sequence.output,
+    output:
+        "results/{pdb_id}/from_sequence_homology/filtered_origin_sequence.fasta",
+    benchmark:
+        Path(
+            "benchmarks/{pdb_id}/from_sequence_homology/filter_origin_sequence.txt"
+        ).absolute()
+    conda:
+        "envs/biopython.yaml"
+    threads: workflow.cores
+    script:
+        "scripts/filter_protein_sequences.py"
+
+
+checkpoint find_sequence_homologs:
+    input:
+        rules.filter_origin_sequence.output,
+    output:
+        blastp="results/{pdb_id}/from_sequence_homology/blastp_results.txt",
+        homologs="results/{pdb_id}/from_sequence_homology/homologs.txt",
+    log:
+        Path(
+            "logs/{pdb_id}/from_sequence_homology/find_sequence_homologs.log"
+        ).absolute(),
+    benchmark:
+        Path(
+            "benchmarks/{pdb_id}/from_sequence_homology/find_sequence_homologs.log"
+        ).absolute()
+    params:
+        db=config["blastp"]["database"],
+        matrix=config["blastp"]["matrix"],
+        evalue=config["blastp"]["e_value"],
+        word_size=config["blastp"]["word_size"],
+        max_target_seqs=config["blastp"]["max_target_seqs"],
+        additional_args=config["blastp"]["additional_args"],
+    singularity:
+        "docker://ncbi/blast:2.15.0"
+    threads: workflow.cores
+    shell:
+        """
+        BLASTDB=$(pwd)/database/{params.db}:$BLASTDB
+
+        blastp \
+            -query {input} \
+            -out {output.blastp} \
+            -num_threads {threads} \
+            -db {params.db} \
+            -outfmt 6 \
+            -matrix {params.matrix} \
+            -evalue {params.evalue} \
+            -word_size {params.word_size} \
+            -max_target_seqs {params.max_target_seqs} \
+            {params.additional_args} \
+            &> {log}
+        awk '{{print $2}}' {output.blastp} | sort | uniq > {output.homologs}
+        """
+
+
+rule download_protein_sequences:
+    input:
+        "results/{pdb_id}/from_sequence_homology/blastp_results.txt",
+    output:
+        dir=directory("results/{pdb_id}/from_sequence_homology/protein_sequences/"),
+        combined_sequences="results/{pdb_id}/from_sequence_homology/protein_sequences/combined.fasta",
+    log:
+        Path(
+            "logs/{pdb_id}/from_sequence_homology/download_protein_sequences.log"
+        ).absolute(),
+    benchmark:
+        Path(
+            "benchmarks/{pdb_id}/from_sequence_homology/protein_sequences.txt"
+        ).absolute()
+    conda:
+        "envs/biopython.yaml"
+    params:
+        db="protein",
+    threads: workflow.cores
+    script:
+        "scripts/batch_download_sequences_ncbi.py"
+
+
+###############################
+### COMMON SUBSEQUENT STEPS ###
+###############################
+
+
+rule filter_protein_sequences:
+    """
+    Remove non-protein sequences from the combined file.
+    """
+    input:
+        "results/{pdb_id}/{homology_type}/protein_sequences/combined.fasta",
+    output:
+        "results/{pdb_id}/{homology_type}/protein_sequences/filtered_combined.fasta",
+    benchmark:
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/filtered_protein_sequences.txt"
+        ).absolute()
+    conda:
+        "envs/biopython.yaml"
+    threads: workflow.cores
+    script:
+        "scripts/filter_protein_sequences.py"
+
+
 rule tblastn_protein_sequences:
     input:
         rules.filter_protein_sequences.output,
     output:
-        "results/{pdb_id}/tblastn_results.txt",
+        "results/{pdb_id}/{homology_type}/tblastn_results.txt",
     log:
-        Path("logs/{pdb_id}/tblastn_protein_sequences.log").absolute(),
+        Path("logs/{pdb_id}/{homology_type}/tblastn_protein_sequences.log").absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/tblastn_protein_sequences.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/tblastn_protein_sequences.txt"
+        ).absolute()
     params:
         db=config["tblastn"]["database"],
         matrix=config["tblastn"]["matrix"],
@@ -248,31 +368,43 @@ rule tblastn_protein_sequences:
 
 rule download_nucleotide_sequences:
     input:
-        rules.tblastn_protein_sequences.output,
+        "results/{pdb_id}/{homology_type}/tblastn_results.txt",
     output:
-        dir=directory("results/{pdb_id}/nucleotide_sequences/{homolog}"),
-        combined_sequences="results/{pdb_id}/nucleotide_sequences/{homolog}/combined.fasta",
+        dir=directory("results/{pdb_id}/{homology_type}/nucleotide_sequences/{homolog}"),
+        combined_sequences="results/{pdb_id}/{homology_type}/nucleotide_sequences/{homolog}/combined.fasta",
     log:
-        Path("logs/{pdb_id}/download_nucleotide_sequences_{homolog}.log").absolute(),
+        Path(
+            "logs/{pdb_id}/{homology_type}/download_nucleotide_sequences_{homolog}.log"
+        ).absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/nucleotide_sequences_{homolog}.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/nucleotide_sequences_{homolog}.txt"
+        ).absolute()
     conda:
         "envs/biopython.yaml"
+    params:
+        db="nucleotide",
     threads: workflow.cores
     script:
-        "scripts/download_nucleotide_sequences.py"
+        "scripts/batch_download_sequences_ncbi.py"
 
 
 rule align_nucleotide_sequences:
     input:
         rules.download_nucleotide_sequences.output.combined_sequences,
     output:
-        alignment="results/{pdb_id}/nucleotide_alignments/{homolog}/alignment.txt",
-        dir=directory("results/{pdb_id}/nucleotide_alignments/{homolog}"),
+        alignment="results/{pdb_id}/{homology_type}/nucleotide_alignments/{homolog}/alignment.txt",
+        dir=directory(
+            "results/{pdb_id}/{homology_type}/nucleotide_alignments/{homolog}"
+        ),
     log:
-        Path("logs/{pdb_id}/align_nucleotide_sequences_{homolog}.log").absolute(),
+        Path(
+            "logs/{pdb_id}/{homology_type}/align_nucleotide_sequences_{homolog}.log"
+        ).absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/nucleotide_alignments_{homolog}.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/nucleotide_alignments_{homolog}.txt"
+        ).absolute()
     singularity:
         "docker://biocontainers/clustalw:v2.1lgpl-6-deb_cv1"
     threads: workflow.cores
@@ -289,13 +421,19 @@ rule predict_separate_RNA_structures:
     input:
         rules.download_nucleotide_sequences.output.dir,
     output:
-        "results/{pdb_id}/separate_RNA_structures/{homolog}/.done",
-        mfe="results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",
-        dir=directory("results/{pdb_id}/separate_RNA_structures/{homolog}"),
+        "results/{pdb_id}/{homology_type}/separate_RNA_structures/{homolog}/.done",
+        mfe="results/{pdb_id}/{homology_type}/separate_RNA_structures/{homolog}/MFEs.txt",
+        dir=directory(
+            "results/{pdb_id}/{homology_type}/separate_RNA_structures/{homolog}"
+        ),
     log:
-        Path("logs/{pdb_id}/predict_separate_RNA_structures_{homolog}.log").absolute(),
+        Path(
+            "logs/{pdb_id}/{homology_type}/predict_separate_RNA_structures_{homolog}.log"
+        ).absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/separate_RNA_structures_{homolog}.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/separate_RNA_structures_{homolog}.txt"
+        ).absolute()
     params:
         args_string=config["RNAfold"],
         dpi=config["plots"]["DPI"],
@@ -334,12 +472,18 @@ rule predict_consensus_RNA_structure:
     input:
         rules.align_nucleotide_sequences.output.alignment,
     output:
-        "results/{pdb_id}/consensus_RNA_structures/{homolog}/MFEs.txt",
-        dir=directory("results/{pdb_id}/consensus_RNA_structures/{homolog}"),
+        "results/{pdb_id}/{homology_type}/consensus_RNA_structures/{homolog}/MFEs.txt",
+        dir=directory(
+            "results/{pdb_id}/{homology_type}/consensus_RNA_structures/{homolog}"
+        ),
     log:
-        Path("logs/{pdb_id}/predict_consensus_RNA_structure_{homolog}.log").absolute(),
+        Path(
+            "logs/{pdb_id}/{homology_type}/predict_consensus_RNA_structure_{homolog}.log"
+        ).absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/consensus_RNA_structures_{homolog}.txt").absolute()
+        Path(
+            "benchmarks/{pdb_id}/{homology_type}/consensus_RNA_structures_{homolog}.txt"
+        ).absolute()
     params:
         args_string=config["RNAalifold"],
         dpi=config["plots"]["DPI"],
@@ -371,12 +515,12 @@ rule downstream_analysis:
         rules.tblastn_protein_sequences.output,
         aggregate_input,
     output:
-        "results/{pdb_id}/downstream_analysis/.done",
-        dir=directory("results/{pdb_id}/downstream_analysis/"),
+        "results/{pdb_id}/{homology_type}/downstream_analysis/.done",
+        dir=directory("results/{pdb_id}/{homology_type}/downstream_analysis/"),
     log:
-        Path("logs/{pdb_id}/downstream_analysis.log").absolute(),
+        Path("logs/{pdb_id}/{homology_type}/downstream_analysis.log").absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/downstream_analysis.txt").absolute()
+        Path("benchmarks/{pdb_id}/{homology_type}/downstream_analysis.txt").absolute()
     conda:
         "envs/dplyr.yaml"
     threads: workflow.cores

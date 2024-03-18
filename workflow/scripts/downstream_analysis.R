@@ -61,7 +61,7 @@ qs_heatmap <- ggplot(
   )
 
 ggsave(
-  filename = paste0(snakemake@output$dir, "/qs_heatmap.png"),
+  filename = paste0(snakemake@output$dir, "/qs_mosaic.png"),
   plot = qs_heatmap,
   width = 10,
   height = 10

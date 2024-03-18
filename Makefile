@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help clean purge run zip
+.PHONY: help clean dryrun purge run zip
 
 help:
 	@echo
@@ -12,6 +12,7 @@ help:
 	@echo
 	@echo "    help - show this help message."
 	@echo "    clean - remove results, logs and benchmarks."
+	@echo "    dryrun - run the pipeline in dryrun mode."
 	@echo "    purge - clean and remove zipped output, .snakemake and .parallel directory."
 	@echo "    run - run the pipeline."
 	@echo "    zip - create a zip file with results, logs and benchmarks."
@@ -19,6 +20,9 @@ help:
 
 clean:
 	@rm -rf results logs benchmarks
+
+dryrun:
+	@snakemake --profile config --dryrun
 
 purge:
 	@rm -rf results logs benchmarks .snakemake .parallel output.zip

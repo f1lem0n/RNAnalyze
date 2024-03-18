@@ -12,7 +12,7 @@ help:
 	@echo
 	@echo "    help - show this help message."
 	@echo "    clean - remove results, logs and benchmarks."
-	@echo "    purge - clean and remove zipped output and .snakemake directory."
+	@echo "    purge - clean and remove zipped output, .snakemake and .parallel directory."
 	@echo "    run - run the pipeline."
 	@echo "    zip - create a zip file with results, logs and benchmarks."
 	@echo
@@ -21,7 +21,7 @@ clean:
 	@rm -rf results logs benchmarks
 
 purge:
-	@rm -rf results logs benchmarks .snakemake output.zip
+	@rm -rf results logs benchmarks .snakemake .parallel output.zip
 
 run:
 	@snakemake --profile config

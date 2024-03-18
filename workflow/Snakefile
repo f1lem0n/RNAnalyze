@@ -33,42 +33,41 @@ def aggregate_input(wildcards):
     Aggregate input files for the downstream analysis rule
     after the checkpoint has been executed.
     """
-    structural_homologs_fp = checkpoints.find_structural_homologs.get(
-        **wildcards
-    ).output[0]
-
-    with open(structural_homologs_fp) as f:
-        structural_homologs = f.read().splitlines()
-
-    sequence_homologs_fp = checkpoints.find_sequence_homologs.get(
-        **wildcards
-    ).output.homologs
-
-    with open(sequence_homologs_fp) as f:
-        sequence_homologs = f.read().splitlines()
 
     aggregated_input = []
 
-    aggregated_input += expand(
-        "results/{pdb_id}/from_structural_homology/separate_RNA_structures/{homolog}/MFEs.txt",
-        pdb_id=wildcards.pdb_id,
-        homolog=structural_homologs,
-    )
-    aggregated_input += expand(
-        "results/{pdb_id}/from_structural_homology/consensus_RNA_structures/{homolog}/MFEs.txt",
-        pdb_id=wildcards.pdb_id,
-        homolog=structural_homologs,
-    )
+    if wildcards.homology_type == "from_structural_homology":
+        cp_output = checkpoints.find_structural_homologs.get(**wildcards).output[0]
+        with open(cp_output) as f:
+            homologs = f.read().splitlines()
+        aggregated_input += expand(
+            "results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
+            pdb_id=wildcards.pdb_id,
+        )
+    elif wildcards.homology_type == "from_sequence_homology":
+        cp_output = checkpoints.find_sequence_homologs.get(**wildcards).output.homologs
+        with open(cp_output) as f:
+            homologs = f.read().splitlines()
+    else:
+        raise ValueError("Invalid homology type")
 
-    aggregated_input += expand(
-        "results/{pdb_id}/from_sequence_homology/separate_RNA_structures/{homolog}/MFEs.txt",
-        pdb_id=wildcards.pdb_id,
-        homolog=sequence_homologs,
+    aggregated_input = (
+        expand(
+            "results/{pdb_id}/{homology_type}/separate_RNA_structures/{homolog}/MFEs.txt",
+            pdb_id=wildcards.pdb_id,
+            homology_type=wildcards.homology_type,
+            homolog=homologs,
+        )
+        + aggregated_input
     )
-    aggregated_input += expand(
-        "results/{pdb_id}/from_sequence_homology/consensus_RNA_structures/{homolog}/MFEs.txt",
-        pdb_id=wildcards.pdb_id,
-        homolog=sequence_homologs,
+    aggregated_input = (
+        expand(
+            "results/{pdb_id}/{homology_type}/consensus_RNA_structures/{homolog}/MFEs.txt",
+            pdb_id=wildcards.pdb_id,
+            homology_type=wildcards.homology_type,
+            homolog=homologs,
+        )
+        + aggregated_input
     )
 
     return aggregated_input
@@ -83,10 +82,10 @@ HOMOLOGY_TYPES = ["from_structural_homology", "from_sequence_homology"]
 
 rule all:
     input:
-        expand(
-            "results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
-            pdb_id=PDB_IDs,
-        ),
+        # expand(
+        #     "results/{pdb_id}/from_structural_homology/structural_alignment/alignment.txt",
+        #     pdb_id=PDB_IDs,
+        # ),
         expand(
             "results/{pdb_id}/{homology_type}/downstream_analysis/.done",
             pdb_id=PDB_IDs,

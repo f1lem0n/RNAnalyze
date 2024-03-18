@@ -16,7 +16,7 @@ blastp:
 tblastn:
   database: "refseq_rna"
   matrix: "BLOSUM62"
-  e_value: 1e-20
+  e_value: 1e-30
   word_size: 6
   max_target_seqs: 10
   additional_args: ""

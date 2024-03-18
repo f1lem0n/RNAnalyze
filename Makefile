@@ -1,23 +1,30 @@
 SHELL := /bin/bash
 
-.PHONY: help clean purge zip
+.PHONY: help clean purge run zip
 
 help:
 	@echo
-	@echo "MAKE TARGETS ARE FOR DEVELOPMENT PURPOSES ONLY."
 	@echo "PLEASE USE CONDA ENV FOR RUNNING ANY OF THE MAKE TARGETS."
 	@echo
+	@echo "Usage: make <target>"
+	@echo
 	@echo "Available targets:"
-	@echo "help - show this help message."
-	@echo "clean - remove results, logs and benchmarks."
-	@echo "purge - clean and remove zipped output and .snakemake directory."
-	@echo "zip - create a zip file with results, logs and benchmarks."
+	@echo
+	@echo "    help - show this help message."
+	@echo "    clean - remove results, logs and benchmarks."
+	@echo "    purge - clean and remove zipped output and .snakemake directory."
+	@echo "    run - run the pipeline."
+	@echo "    zip - create a zip file with results, logs and benchmarks."
+	@echo
 
 clean:
 	@rm -rf results logs benchmarks
 
 purge:
 	@rm -rf results logs benchmarks .snakemake output.zip
+
+run:
+	@snakemake --profile config
 
 zip:
 	@zip -r output.zip results logs benchmarks

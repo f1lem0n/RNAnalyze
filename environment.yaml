@@ -73,6 +73,7 @@ dependencies:
   - logmuse=0.2.6
   - lz4-c=1.9.4
   - lzo=2.10
+  - make=4.2.1
   - markdown-it-py=3.0.0
   - markupsafe=2.1.5
   - mdurl=0.1.2

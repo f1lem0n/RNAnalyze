@@ -185,7 +185,9 @@ rule align_protein_structures:
         "docker://f1lem0n/usalign:latest"
     threads: workflow.cores
     shell:
-        """ # Run USalign USalign -dir {input.dir} {input.homologs} \
+        """ 
+	# Run USalign 
+	USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
             -split {params.split} > {output.dir}/alignment.txt 2> {log}
 

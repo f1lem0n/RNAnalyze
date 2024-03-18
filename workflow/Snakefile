@@ -59,6 +59,7 @@ rule all:
     input:
         expand("results/{pdb_id}/structural_alignment/alignment.txt", pdb_id=PDB_IDs),
         expand("results/{pdb_id}/downstream_analysis/.done", pdb_id=PDB_IDs),
+        expand("results/{pdb_id}/blastp_results.txt", pdb_id=PDB_IDs),
 
 
 checkpoint find_structural_homologs:
@@ -112,16 +113,16 @@ rule download_protein_sequences_and_structures:
         """
 
 
-checkpoint find_sequence_homologs:
+checkpoint blastp_main_protein_sequence:
     input:
         rules.download_protein_sequences_and_structures.output.sequences
         + "/{pdb_id}.fasta",
     output:
         "results/{pdb_id}/blastp_results.txt",
     log:
-        Path("logs/{pdb_id}/find_sequence_homologs.log").absolute(),
+        Path("logs/{pdb_id}/blastp_main_protein_sequence.log").absolute(),
     benchmark:
-        Path("benchmarks/{pdb_id}/find_sequence_homologs.log").absolute()
+        Path("benchmarks/{pdb_id}/blastp_main_protein_sequence.log").absolute()
     params:
         db=config["blastp"]["database"],
         matrix=config["blastp"]["matrix"],
@@ -129,6 +130,8 @@ checkpoint find_sequence_homologs:
         word_size=config["blastp"]["word_size"],
         max_target_seqs=config["blastp"]["max_target_seqs"],
         additional_args=config["blastp"]["additional_args"],
+    singularity:
+        "docker://ncbi/blast:2.15.0"
     threads: workflow.cores
     shell:
         """
@@ -185,9 +188,9 @@ rule align_protein_structures:
         "docker://f1lem0n/usalign:latest"
     threads: workflow.cores
     shell:
-        """ 
-	# Run USalign 
-	USalign -dir {input.dir} {input.homologs} \
+        """
+        # Run USalign
+        USalign -dir {input.dir} {input.homologs} \
             -suffix .pdb -mm 4 -full {params.full} -o {output.dir}/sup \
             -split {params.split} > {output.dir}/alignment.txt 2> {log}
 
@@ -282,29 +285,9 @@ rule align_nucleotide_sequences:
         """
 
 
-rule split_long_nucleotide_sequences:
-    input:
-        rules.download_nucleotide_sequences.output.dir,
-    output:
-        "results/{pdb_id}/split_nucleotide_sequences/{homolog}/.done",
-        dir=directory("results/{pdb_id}/split_nucleotide_sequences/{homolog}"),
-    log:
-        Path("logs/{pdb_id}/split_nucleotide_sequences_{homolog}.log").absolute(),
-    benchmark:
-        Path("benchmarks/{pdb_id}/split_nucleotide_sequences_{homolog}.txt").absolute()
-    params:
-        threshold=config["split_long_nucleotide_sequences"]["threshold"],
-        chunk_size=config["split_long_nucleotide_sequences"]["chunk_size"],
-    conda:
-        "envs/biopython.yaml"
-    threads: workflow.cores
-    script:
-        "scripts/split_long_nucleotide_sequences.py"
-
-
 rule predict_separate_RNA_structures:
     input:
-        rules.split_long_nucleotide_sequences.output.dir,
+        rules.download_nucleotide_sequences.output.dir,
     output:
         "results/{pdb_id}/separate_RNA_structures/{homolog}/.done",
         mfe="results/{pdb_id}/separate_RNA_structures/{homolog}/MFEs.txt",

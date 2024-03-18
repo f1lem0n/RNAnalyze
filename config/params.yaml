@@ -21,10 +21,6 @@ tblastn:
   max_target_seqs: 10
   additional_args: ""
 
-split_long_nucleotide_sequences:
-  threshold: -1
-  chunk_size: -1
-
 RNAalifold: "-p -r -d2 --noLP --color --aln"
 RNAfold: "-p -d2 --noLP"
 

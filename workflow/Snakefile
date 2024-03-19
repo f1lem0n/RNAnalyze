@@ -75,7 +75,7 @@ def aggregate_input(wildcards):
 
 # Determine the PDB IDs to process
 with open("resources/list.txt") as f:
-    PDB_IDs = f.read().lower().splitlines()
+    PDB_IDs = f.read().upper().splitlines()
 
 HOMOLOGY_TYPES = [
     "from_structural_homology",

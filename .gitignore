@@ -4,8 +4,10 @@ WIP/
 results/
 benchmarks/
 logs/
-swissprot/
-refseq_rna/
+database/
 __pycache__/
 *.zip
 *.pyc
+*.pml
+*.pdb
+!database/update_blastdb.pl

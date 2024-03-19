@@ -15,9 +15,11 @@ def batch_download(input: Path, output: Path, db: str) -> None:
         blast_table = f.readlines()
     for line in blast_table:
         accession_number = line.split("\t")[1]
-        homolog = line.split("\t")[0].split("_")[0].lower()
         start = int(line.split("\t")[8])
         stop = int(line.split("\t")[9])
+        homolog = line.split("\t")[0].split("_")[0].lower()
+        if "|" in homolog:
+            homolog = homolog.split("|")[1]
         if homolog in str(output):
             download_sequence(accession_number, db, start, stop, output)
     combine_sequences(output)

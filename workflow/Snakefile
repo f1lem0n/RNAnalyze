@@ -77,7 +77,10 @@ def aggregate_input(wildcards):
 with open("resources/list.txt") as f:
     PDB_IDs = f.read().lower().splitlines()
 
-HOMOLOGY_TYPES = ["from_structural_homology", "from_sequence_homology"]
+HOMOLOGY_TYPES = [
+    "from_structural_homology",
+    "from_sequence_homology",
+]
 
 
 rule all:

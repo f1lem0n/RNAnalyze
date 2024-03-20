@@ -102,19 +102,21 @@ Each parameter is described below.
     2: (default) treat each chain as a separate chain
   - `full[="T"]` Whether to show full pairwise alignment of individual chains
     for -mm 2 or 4.
-- `tblastn`
+- `blastp`
+  - `database[="refseq"]` Database for blastp to search against
   - `matrix[="BLOSUM62"]` Scoring matrix
-  - `evalue[=1e-20]` E-value threshold for tblastn
+  - `evalue[=1e-20]` E-value threshold for blastp
+  - `max_target_seqs[=10]` Maximum number of target sequences
+  - `word_size[=6]` Word size for initial match. Valid word sizes are 2-7.
+  - `additional_args[=""]` Additional arguments for blastp
+    (refer to [BLAST+ manual](https://www.ncbi.nlm.nih.gov/books/NBK279690/))
+- `tblastn`
+  - `database[="refseq_select_rna"]` Database for tblastn to search against
+  - `matrix[="BLOSUM62"]` Scoring matrix
+  - `evalue[=1e-30]` E-value threshold for tblastn
   - `max_target_seqs[=10]` Maximum number of target sequences
   - `word_size[=6]` Word size for initial match. Valid word sizes are 2-7.
   - `additional_args[=""]` Additional arguments for tblastn
-    (refer to [BLAST+ manual](https://www.ncbi.nlm.nih.gov/books/NBK279690/))
-- `split_long_nucleotide_sequences` Set either one below to
-  the negative value to turn off this feature
-  - `threshold[=1000]` Minimum length of a sequence which will be split into
-    chunks. If negative, no sequences will be split.
-  - `chunk_size[=1000]` Length of a sequence chunk (if splitting is enabled).
-    If negative, no sequences will be split.
 - `RNAfold[="-p -r -d2 --noLP --color --aln"]` RNAfold arguments
   (refer to [RNAfold manual](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html))
 - `RNAalifold[="-p -r -d2 --noLP --color --aln"]` RNAalifold arguments

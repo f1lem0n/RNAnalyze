@@ -15,6 +15,8 @@ longer description (TODO)
 
 - [Git](https://git-scm.com/)
 - [Conda](https://docs.conda.io/en/latest/miniconda.html)
+- Access to the internet (for downloading databases during
+  setup and sequences and structures during runtime)
 
 ### Installation
 

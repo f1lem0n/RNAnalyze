@@ -11,6 +11,17 @@ min_version("8.4.8")
 configfile: "config/params.yaml"
 
 
+if (
+    config["blastp"]["database"] not in Path("database").iterdir()
+    or config["tblastn"]["database"] not in Path("database").iterdir()
+):
+    print(
+        "\nERROR: BLAST+ databases not found!\n"
+        "Please download blast databases first using `make blastdb`.\n"
+    )
+    exit(1)
+
+
 onsuccess:
     print("Workflow finished succesfuly!")
     if config["send_email"]:

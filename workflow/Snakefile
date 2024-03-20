@@ -11,9 +11,14 @@ min_version("8.4.8")
 configfile: "config/params.yaml"
 
 
+# Ensure that the BLAST+ databases are available
+databases = [
+    str(db).replace("database/", "")
+    for db in list(Path("database").iterdir())
+]
 if (
-    config["blastp"]["database"] not in Path("database").iterdir()
-    or config["tblastn"]["database"] not in Path("database").iterdir()
+    config["blastp"]["database"] not in databases
+    or config["tblastn"]["database"] not in databases
 ):
     print(
         "\nERROR: BLAST+ databases not found!\n"

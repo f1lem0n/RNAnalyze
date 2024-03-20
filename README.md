@@ -29,15 +29,47 @@ conda env create -f environment.yml
 ### Local database setup
 
 To use this workflow you will need to download databases for BLAST+ programs.
-To do this use `update_blastdb.pl` script located in `database` directory.
-The best way to do it would be:
-
+To do this use the Make target `make blastdb` with `RNAnalyze` conda env active.
+By default RNAnalyze uses `refseq_select_rna` for tblastn and `swissprot` for
+blastp. To change these you will need to edit `config/params.yaml` file
+(see Configuration section). Available databases are:
 ```
-perl update_blastdb.pl <db_name>
-mkdir <db_name>
-mv <db_name>.zip <db_name>/.
-cd <db_name>
-unzip <db_name>.zip
+ITS_RefSeq_Fungi
+28S_fungal_sequences
+Betacoronavirus
+18S_fungal_sequences
+16S_ribosomal_RNA
+ITS_eukaryote_sequences
+LSU_eukaryote_rRNA
+LSU_prokaryote_rRNA
+SSU_eukaryote_rRNA
+env_nt
+env_nr
+human_genome
+landmark
+mito
+mouse_genome
+nr
+nt_euk
+nt
+nt_others
+nt_prok
+nt_viruses
+pataa
+patnt
+pdbaa
+pdbnt
+ref_euk_rep_genomes
+ref_prok_rep_genomes
+ref_viroids_rep_genomes
+ref_viruses_rep_genomes
+refseq_select_rna
+refseq_select_prot
+refseq_protein
+refseq_rna
+swissprot
+tsa_nr
+tsa_nt
 ```
 
 ## Usage
@@ -46,7 +78,8 @@ unzip <db_name>.zip
 
 1. Activate conda environment `conda activate RNAnalyze`
 2. Edit `resources/list.txt` to include your proteins of interest
-3. Run `snakemake --profile config`
+3. Execute `make run` or `make dryrun` if you want to see what will
+  be executed before checkpoints
 
 ### Configuration
 

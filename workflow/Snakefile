@@ -123,7 +123,8 @@ checkpoint find_structural_homologs:
     threads: workflow.cores
     shell:
         """
-        category=$(cat {input} | grep {wildcards.pdb_id} \
+        category=$(cat {input} \
+            | grep $(echo {wildcards.pdb_id} | tr '[:upper:]' '[:lower:]') \
             | awk '{{print $4}}' | awk '!seen[$0]++')
         rm -f {output}.temp
         for c in $category; do
@@ -261,7 +262,7 @@ checkpoint find_sequence_homologs:
         ).absolute(),
     benchmark:
         Path(
-            "benchmarks/{pdb_id}/from_sequence_homology/find_sequence_homologs.log"
+            "benchmarks/{pdb_id}/from_sequence_homology/find_sequence_homologs.txt"
         ).absolute()
     params:
         db=config["blastp"]["database"],

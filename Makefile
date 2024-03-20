@@ -20,20 +20,24 @@ help:
 	@echo
 
 blastdb:
-	@if [ ! -d database ]; then \
-		mkdir database; \
-	fi
 	@for db in $$(awk '{if($$1 == "database:") print $$2}' config/params.yaml); do \
 		db=$$(echo $$db | sed 's/\"//g'); \
 		if [ -d database/$$db ]; then \
-		 	echo "Database $$db already exists."; \
-			continue; \
+			if [ ! -z "$$(ls -A database/$$db)" ]; then \
+				echo "Database $$db already exists."; \
+				continue; \
+			fi; \
 		fi; \
+		echo "Searching for $$db..."; \
 		perl database/update_blastdb.pl $$db; \
 		echo "Moving and unpacking..."; \
 		mkdir database/$$db; \
 		mv $$db*tar.gz* database/$$db/.; \
-		cd database/$$db && tar -xvzf $$db.tar.gz && rm -rf $$db.tar.gz && cd - > /dev/null; \
+		cd database/$$db && \
+		tar -xvzf $$db.tar.gz && \
+		rm -rf $$db.tar.gz && \
+		cd - > /dev/null; \
+		echo "Success!"; \
 	done
 
 clean:

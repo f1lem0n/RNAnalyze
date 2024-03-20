@@ -22,7 +22,7 @@ Paste this into your terminal:
 
 ```
 git clone https://github.com/f1lem0n/RNAnalyze
-cd RNAanalyze && conda env create -f environment.yaml
+cd RNAnalyze && conda env create -f environment.yaml
 ```
 
 ### Local database setup

@@ -13,8 +13,7 @@ configfile: "config/params.yaml"
 
 # Ensure that the BLAST+ databases are available
 databases = [
-    str(db).replace("database/", "")
-    for db in list(Path("database").iterdir())
+    str(db).replace("database/", "") for db in list(Path("database").iterdir())
 ]
 if (
     config["blastp"]["database"] not in databases
@@ -38,7 +37,7 @@ onsuccess:
 onerror:
     print("An error occurred!")
     if config["send_email"]:
-        shell('mail -s "An error occurred!" ' + config["email"] + " < {log}")
+        shell('mail -s "An error has occurred!" ' + config["email"] + " < {log}")
 
 
 ###

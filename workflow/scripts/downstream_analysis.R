@@ -10,10 +10,14 @@ suppressMessages({
 })
 
 # # read the data
-tblastn_out <- read.table(
+tblastn_out <- try(read.table(
   file = snakemake@input[[1]],
   sep = "\t",
-)
+))
+if (class(tblastn_out) == "try-error") {
+  file.create(snakemake@output[[1]])
+  q("no")
+}
 colnames(tblastn_out) <- c(
   "query",
   "subject",
